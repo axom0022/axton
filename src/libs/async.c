@@ -1,37 +1,19 @@
 #include "../core/axton.h"
 
-typedef struct asynctask {
-    object *coro;
-    struct asynctask *next;
-} asynctask;
-
-static asynctask *taskqueue = NULL;
-static int asynclooprunning = 0;
-
-object *asynccreate(object *func) {
-    object *coro = gcalloc(sizeof(object));
-    coro->type = 22;
-    coro->coroutine.func = func;
-    coro->coroutine.state = 0;
-    return coro;
+object *makecoroutine(object *func) {
+    object *obj = gcalloc(sizeof(object));
+    obj->type = 21;
+    obj->coroutine.func = func;
+    obj->coroutine.state = 0;
+    return obj;
 }
 
-void asyncrunloop(void) {
-    asynclooprunning = 1;
-    while (asynclooprunning && taskqueue) {
-        asynctask *task = taskqueue;
-        taskqueue = task->next;
-        if (task->coro->coroutine.state == 0) {
-            callfunc(task->coro->coroutine.func, NULL, 0, globalenv);
-            task->coro->coroutine.state = 1;
-        }
-        free(task);
-    }
-    asynclooprunning = 0;
+object *asynccreate(object *func) {
+    return makecoroutine(func);
 }
 
 object *asyncawait(object *coro) {
-    if (coro->type != 22) throwexception("not a coroutine");
+    if (coro->type != 21) throwexception("not a coroutine");
     callfunc(coro->coroutine.func, NULL, 0, globalenv);
     return makenone();
 }
@@ -47,7 +29,6 @@ object *builtinawait(object **args, int argc, environment *env) {
 }
 
 object *builtinrunloop(object **args, int argc, environment *env) {
-    asyncrunloop();
     return makenone();
 }
 
