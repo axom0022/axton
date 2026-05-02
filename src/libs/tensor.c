@@ -1,11 +1,5 @@
 #include "../core/axton.h"
 
-typedef struct {
-    float *data;
-    int rows;
-    int cols;
-} tensor;
-
 object *maketensor(float *data, int rows, int cols) {
     object *obj = gcalloc(sizeof(object));
     obj->type = 20;
