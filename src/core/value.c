@@ -1,6 +1,6 @@
 #include "axton.h"
 
-void list_append(object *list, object *item) {
+void listappend(object *list, object *item) {
     if (list->type != 5) return;
     if (list->list.count >= list->list.cap) {
         list->list.cap *= 2;
@@ -9,17 +9,23 @@ void list_append(object *list, object *item) {
     list->list.items[list->list.count++] = item;
 }
 
-object *list_get(object *list, long idx) {
+object *listget(object *list, long idx) {
     if (list->type != 5) return NULL;
     if (idx < 0) idx = list->list.count + idx;
     if (idx < 0 || idx >= list->list.count) return NULL;
     return list->list.items[idx];
 }
 
-void dict_set(object *dict, object *key, object *val) {
+void listset(object *list, long idx, object *item) {
+    if (list->type != 5) return;
+    if (idx < 0) idx = list->list.count + idx;
+    if (idx >= 0 && idx < list->list.count) list->list.items[idx] = item;
+}
+
+void dictset(object *dict, object *key, object *val) {
     if (dict->type != 6) return;
     for (int i = 0; i < dict->dict.count; i++) {
-        if (values_equal(dict->dict.keyvals[i], key)) {
+        if (valuesequal(dict->dict.keyvals[i], key)) {
             dict->dict.vals[i] = val;
             return;
         }
@@ -32,23 +38,23 @@ void dict_set(object *dict, object *key, object *val) {
     dict->dict.vals[dict->dict.count - 1] = val;
 }
 
-object *dict_get(object *dict, object *key) {
+object *dictget(object *dict, object *key) {
     if (dict->type != 6) return NULL;
     for (int i = 0; i < dict->dict.count; i++) {
-        if (values_equal(dict->dict.keyvals[i], key)) return dict->dict.vals[i];
+        if (valuesequal(dict->dict.keyvals[i], key)) return dict->dict.vals[i];
     }
     return NULL;
 }
 
-int dict_has(object *dict, object *key) {
+int dicthas(object *dict, object *key) {
     if (dict->type != 6) return 0;
     for (int i = 0; i < dict->dict.count; i++) {
-        if (values_equal(dict->dict.keyvals[i], key)) return 1;
+        if (valuesequal(dict->dict.keyvals[i], key)) return 1;
     }
     return 0;
 }
 
-int is_truthy(object *v) {
+int istruthy(object *v) {
     if (!v) return 0;
     switch (v->type) {
         case 3: return v->bval;
@@ -62,7 +68,7 @@ int is_truthy(object *v) {
     }
 }
 
-int values_equal(object *a, object *b) {
+int valuesequal(object *a, object *b) {
     if (a->type != b->type) return 0;
     switch (a->type) {
         case 0: return a->ival == b->ival;
@@ -74,73 +80,73 @@ int values_equal(object *a, object *b) {
     }
 }
 
-object *add_values(object *a, object *b) {
-    if (a->type == 0 && b->type == 0) return make_int(a->ival + b->ival);
-    if (a->type == 1 && b->type == 1) return make_float(a->fval + b->fval);
-    if (a->type == 0 && b->type == 1) return make_float(a->ival + b->fval);
-    if (a->type == 1 && b->type == 0) return make_float(a->fval + b->ival);
+object *addvalues(object *a, object *b) {
+    if (a->type == 0 && b->type == 0) return makeint(a->ival + b->ival);
+    if (a->type == 1 && b->type == 1) return makefloat(a->fval + b->fval);
+    if (a->type == 0 && b->type == 1) return makefloat(a->ival + b->fval);
+    if (a->type == 1 && b->type == 0) return makefloat(a->fval + b->ival);
     if (a->type == 2 && b->type == 2) {
         char *s = malloc(strlen(a->sval) + strlen(b->sval) + 1);
         strcpy(s, a->sval);
         strcat(s, b->sval);
-        return make_string(s);
+        return makestring(s);
     }
-    throw_exception("bad operands for add");
+    throwexception("bad operands for add");
     return NULL;
 }
 
-object *sub_values(object *a, object *b) {
-    if (a->type == 0 && b->type == 0) return make_int(a->ival - b->ival);
-    if (a->type == 1 && b->type == 1) return make_float(a->fval - b->fval);
-    if (a->type == 0 && b->type == 1) return make_float(a->ival - b->fval);
-    if (a->type == 1 && b->type == 0) return make_float(a->fval - b->ival);
-    throw_exception("bad operands for sub");
+object *subvalues(object *a, object *b) {
+    if (a->type == 0 && b->type == 0) return makeint(a->ival - b->ival);
+    if (a->type == 1 && b->type == 1) return makefloat(a->fval - b->fval);
+    if (a->type == 0 && b->type == 1) return makefloat(a->ival - b->fval);
+    if (a->type == 1 && b->type == 0) return makefloat(a->fval - b->ival);
+    throwexception("bad operands for sub");
     return NULL;
 }
 
-object *mul_values(object *a, object *b) {
-    if (a->type == 0 && b->type == 0) return make_int(a->ival * b->ival);
-    if (a->type == 1 && b->type == 1) return make_float(a->fval * b->fval);
-    if (a->type == 0 && b->type == 1) return make_float(a->ival * b->fval);
-    if (a->type == 1 && b->type == 0) return make_float(a->fval * b->ival);
+object *mulvalues(object *a, object *b) {
+    if (a->type == 0 && b->type == 0) return makeint(a->ival * b->ival);
+    if (a->type == 1 && b->type == 1) return makefloat(a->fval * b->fval);
+    if (a->type == 0 && b->type == 1) return makefloat(a->ival * b->fval);
+    if (a->type == 1 && b->type == 0) return makefloat(a->fval * b->ival);
     if (a->type == 2 && b->type == 0) {
         int len = strlen(a->sval) * b->ival;
         char *s = malloc(len + 1);
         s[0] = 0;
         for (int i = 0; i < b->ival; i++) strcat(s, a->sval);
-        return make_string(s);
+        return makestring(s);
     }
-    throw_exception("bad operands for mul");
+    throwexception("bad operands for mul");
     return NULL;
 }
 
-object *div_values(object *a, object *b) {
-    if (b->type == 0 && b->ival == 0) throw_exception("division by zero");
-    if (b->type == 1 && b->fval == 0) throw_exception("division by zero");
-    if (a->type == 0 && b->type == 0) return make_float((double)a->ival / b->ival);
-    if (a->type == 1 && b->type == 1) return make_float(a->fval / b->fval);
-    if (a->type == 0 && b->type == 1) return make_float(a->ival / b->fval);
-    if (a->type == 1 && b->type == 0) return make_float(a->fval / b->ival);
-    throw_exception("bad operands for div");
+object *divvalues(object *a, object *b) {
+    if (b->type == 0 && b->ival == 0) throwexception("division by zero");
+    if (b->type == 1 && b->fval == 0) throwexception("division by zero");
+    if (a->type == 0 && b->type == 0) return makefloat((double)a->ival / b->ival);
+    if (a->type == 1 && b->type == 1) return makefloat(a->fval / b->fval);
+    if (a->type == 0 && b->type == 1) return makefloat(a->ival / b->fval);
+    if (a->type == 1 && b->type == 0) return makefloat(a->fval / b->ival);
+    throwexception("bad operands for div");
     return NULL;
 }
 
-int less_than(object *a, object *b) {
+int lessthan(object *a, object *b) {
     if (a->type == 0 && b->type == 0) return a->ival < b->ival;
     if (a->type == 1 && b->type == 1) return a->fval < b->fval;
     if (a->type == 0 && b->type == 1) return a->ival < b->fval;
     if (a->type == 1 && b->type == 0) return a->fval < b->ival;
     if (a->type == 2 && b->type == 2) return strcmp(a->sval, b->sval) < 0;
-    throw_exception("cannot compare");
+    throwexception("cannot compare");
     return 0;
 }
 
-int greater_than(object *a, object *b) {
+int greaterthan(object *a, object *b) {
     if (a->type == 0 && b->type == 0) return a->ival > b->ival;
     if (a->type == 1 && b->type == 1) return a->fval > b->fval;
     if (a->type == 0 && b->type == 1) return a->ival > b->fval;
     if (a->type == 1 && b->type == 0) return a->fval > b->ival;
     if (a->type == 2 && b->type == 2) return strcmp(a->sval, b->sval) > 0;
-    throw_exception("cannot compare");
+    throwexception("cannot compare");
     return 0;
 }
