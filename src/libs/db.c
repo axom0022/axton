@@ -3,10 +3,6 @@
 #ifdef HAVE_SQLITE
 #include <sqlite3.h>
 
-typedef struct {
-    sqlite3 *db;
-} dbconn;
-
 object *dbconnect(char *path) {
     sqlite3 *db;
     if (sqlite3_open(path, &db) != SQLITE_OK) {
@@ -14,7 +10,6 @@ object *dbconnect(char *path) {
         return NULL;
     }
     object *obj = makemodule("dbconn", NULL);
-    obj->type = 21;
     obj->native.handle = db;
     return obj;
 }
