@@ -1,6 +1,6 @@
 #include "axton.h"
 
-environment *env_new(environment *parent) {
+environment *envnew(environment *parent) {
     environment *env = malloc(sizeof(environment));
     env->cap = 8;
     env->count = 0;
@@ -12,11 +12,11 @@ environment *env_new(environment *parent) {
     return env;
 }
 
-void env_set(environment *env, char *name, object *val, int cnst) {
+void envset(environment *env, char *name, object *val, int cnst) {
     for (int i = 0; i < env->count; i++) {
         if (strcmp(env->names[i], name) == 0) {
             if (env->isconst[i]) {
-                throw_exception("cannot reassign constant");
+                throwexception("cannot reassign constant");
             }
             env->values[i] = val;
             return;
@@ -34,10 +34,10 @@ void env_set(environment *env, char *name, object *val, int cnst) {
     env->count++;
 }
 
-object *env_get(environment *env, char *name) {
+object *envget(environment *env, char *name) {
     for (int i = 0; i < env->count; i++) {
         if (strcmp(env->names[i], name) == 0) return env->values[i];
     }
-    if (env->parent) return env_get(env->parent, name);
+    if (env->parent) return envget(env->parent, name);
     return NULL;
 }
