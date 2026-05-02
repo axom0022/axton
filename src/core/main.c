@@ -1,5 +1,6 @@
 #include "axton.h"
 #include "../platform/platform.h"
+#include "../libs/register.c"
 
 environment *globalenv = NULL;
 frame *currentframe = NULL;
@@ -19,6 +20,15 @@ object *builtinhelp(object **args, int argc, environment *env) {
     platformlog("  type(x)         get type\n");
     platformlog("  exit()          exit\n");
     platformlog("  help()          this help\n");
+    platformlog("\n");
+    platformlog("libraries:\n");
+    platformlog("  math.pi, math.e, math.sqrt, math.sin, math.cos\n");
+    platformlog("  tensor.new, tensor.add, tensor.mul\n");
+    platformlog("  gui.window, gui.run\n");
+    platformlog("  db.connect, db.query, db.execute\n");
+    platformlog("  async.create, async.await, async.run\n");
+    platformlog("  package.load, package.install, package.list\n");
+    platformlog("  web.start, web.get, web.json, web.html\n");
     platformlog("\n");
     return makenone();
 }
@@ -68,6 +78,7 @@ int main(int argc, char **argv) {
     globalenv->globals = globalenv;
     registerbuiltins(globalenv);
     registerstdlib(globalenv);
+    registeralllibs(globalenv);
     initexceptions(globalenv);
     if (argc < 2) {
         replstart();
