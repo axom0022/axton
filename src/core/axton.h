@@ -20,7 +20,7 @@
 #define mkdir(x,y) _mkdir(x)
 #define strcasecmp _stricmp
 #define snprintf _snprintf
-#define pathsep '\\'
+#define PATHSEP '\\'
 #else
 #include <unistd.h>
 #include <dirent.h>
@@ -29,14 +29,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#define pathsep '/'
+#define PATHSEP '/'
 #endif
 
 #ifdef __ANDROID__
 #include <android/log.h>
-#define logi(...) __android_log_print(ANDROID_LOG_INFO, "axton", __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "axton", __VA_ARGS__)
 #else
-#define logi(...) printf(__VA_ARGS__)
+#define LOGI(...) printf(__VA_ARGS__)
 #endif
 
 #ifdef __EMSCRIPTEN__
@@ -46,24 +46,24 @@
 #ifdef __APPLE__
 #include <TargetConditionals.h>
 #if TARGET_OS_IPHONE
-#define platformios 1
+#define PLATFORMIOS 1
 #else
-#define platformmacos 1
+#define PLATFORMMACOS 1
 #endif
 #endif
 
 typedef enum {
-    tokeof, tokident, toknumber, tokstring,
-    tokindent, tokdedent, toknewline,
-    toklet, tokconst, tokfn, tokif, tokelse, tokelif,
-    tokfor, tokin, tokwhile, tokbreak, toknext, tokreturn,
-    toknone, toktrue, tokfalse, tokand, tokor, toknot,
-    tokplus, tokminus, tokstar, tokslash, tokpercent,
-    tokeq, tokeqeq, tokne, toklt, tokgt, tokle, tokge,
-    toklparen, tokrparen, toklbracket, tokrbracket,
-    toklbrace, tokrbrace, tokcomma, tokdot, tokcolon,
-    tokcry, tokcatch, tokfinally, tokthrow, tokclass, tokimport,
-    tokasync, tokawait, tokyield
+    TOKEOF, TOKIDENT, TOKNUMBER, TOKSTRING,
+    TOKINDENT, TOKDEDENT, TOKNEWLINE,
+    TOKLET, TOKCONST, TOKFN, TOKIF, TOKELSE, TOKELIF,
+    TOKFOR, TOKIN, TOKWHILE, TOKBREAK, TOKNEXT, TOKRETURN,
+    TOKNONE, TOKTRUE, TOKFALSE, TOKAND, TOKOR, TOKNOT,
+    TOKPLUS, TOKMINUS, TOKSTAR, TOKSLASH, TOKPERCENT,
+    TOKEQ, TOKEQEQ, TOKNE, TOKLT, TOKGT, TOKLE, TOKGE,
+    TOKLPAREN, TOKRPAREN, TOKLBRACKET, TOKRBRACKET,
+    TOKLBRACE, TOKRBRACE, TOKCOMMA, TOKDOT, TOKCOLON,
+    TOKTRY, TOKCATCH, TOKFINALLY, TOKTHROW, TOKCLASS, TOKIMPORT,
+    TOKASYNC, TOKAWAIT, TOKYIELD
 } toktype;
 
 typedef struct token {
@@ -148,6 +148,15 @@ typedef struct object {
             void *handle;
             void *data;
         } native;
+        struct {
+            float *data;
+            int rows;
+            int cols;
+        } tensor;
+        struct {
+            struct object *func;
+            int state;
+        } coroutine;
     };
 } object;
 
@@ -204,6 +213,8 @@ object *makeinstance(object *klass);
 object *makerange(long start, long stop, long step);
 object *makemodule(char *name, void *handle);
 object *makenative(void *handle, void *data);
+object *maketensor(float *data, int rows, int cols);
+object *makecoroutine(object *func);
 
 void listappend(object *list, object *item);
 object *listget(object *list, long idx);
@@ -235,6 +246,7 @@ object *evalprogram(stmt *program, environment *env);
 object *callfunc(object *fn, object **args, int argc, environment *env);
 void registerbuiltins(environment *env);
 void registerstdlib(environment *env);
+void registeralllibs(environment *env);
 
 void replstart(void);
 void breakpoint(int line);
