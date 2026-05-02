@@ -4,76 +4,75 @@
 environment *globalenv = NULL;
 frame *currentframe = NULL;
 int tcount = 0;
-platform_api platform;
+platformapi platform;
 
-object *builtin_help(object **args, int argc, environment *env) {
-    platform_log("\n");
-    platform_log("axton language\n");
-    platform_log("  print(x)        print value\n");
-    platform_log("  len(x)          get length\n");
-    platform_log("  str(x)          to string\n");
-    platform_log("  int(x)          to integer\n");
-    platform_log("  float(x)        to float\n");
-    platform_log("  input(prompt)   read input\n");
-    platform_log("  range(stop)     create range\n");
-    platform_log("  type(x)         get type\n");
-    platform_log("  exit()          exit\n");
-    platform_log("  help()          this help\n");
-    platform_log("\n");
-    return make_none();
+object *builtinhelp(object **args, int argc, environment *env) {
+    platformlog("\n");
+    platformlog("axton language\n");
+    platformlog("  print(x)        print value\n");
+    platformlog("  len(x)          get length\n");
+    platformlog("  str(x)          to string\n");
+    platformlog("  int(x)          to integer\n");
+    platformlog("  float(x)        to float\n");
+    platformlog("  input(prompt)   read input\n");
+    platformlog("  range(stop)     create range\n");
+    platformlog("  type(x)         get type\n");
+    platformlog("  exit()          exit\n");
+    platformlog("  help()          this help\n");
+    platformlog("\n");
+    return makenone();
 }
 
-void register_builtins(environment *env) {
-    env_set(env, "help", make_builtin(builtin_help), 0);
+void registerbuiltins(environment *env) {
+    envset(env, "help", makebuiltin(builtinhelp), 0);
 }
 
-static void run_file(const char *path) {
-    char *source = platform_read_file(path);
+static void runfile(const char *path) {
+    char *source = platformreadfile(path);
     if (!source) {
-        platform_log("cannot open file\n");
+        platformlog("cannot open file\n");
         exit(1);
     }
     token *toks = tokenize(source);
     if (!toks) {
-        platform_log("lexical error\n");
+        platformlog("lexical error\n");
         free(source);
         exit(1);
     }
-    stmt *prog = parse_tokens(toks, tcount);
+    stmt *prog = parsetokens(toks, tcount);
     if (!prog) {
-        platform_log("parse error\n");
+        platformlog("parse error\n");
         free(source);
         exit(1);
     }
     frame frm;
     currentframe = &frm;
     if (setjmp(frm.jump) == 0) {
-        eval_program(prog, globalenv);
+        evalprogram(prog, globalenv);
     } else {
-        object *ex = catch_exception();
+        object *ex = catchexception();
         if (ex && ex->type == 2) {
-            platform_log("error: ");
-            platform_log(ex->sval);
-            platform_log("\n");
+            platformlog("error: ");
+            platformlog(ex->sval);
+            platformlog("\n");
         }
     }
     free(source);
 }
 
 int main(int argc, char **argv) {
-    platform_init();
-    gc_init();
+    platforminit();
+    gcinit();
     srand(time(NULL));
-    globalenv = env_new(NULL);
+    globalenv = envnew(NULL);
     globalenv->globals = globalenv;
-    register_builtins(globalenv);
-    register_stdlib(globalenv);
-    init_exceptions(globalenv);
-    
+    registerbuiltins(globalenv);
+    registerstdlib(globalenv);
+    initexceptions(globalenv);
     if (argc < 2) {
-        repl_start();
+        replstart();
     } else {
-        run_file(argv[1]);
+        runfile(argv[1]);
     }
     return 0;
 }
