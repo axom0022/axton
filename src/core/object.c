@@ -1,41 +1,41 @@
 #include "axton.h"
 
-object *make_int(long v) {
-    object *obj = gc_alloc(sizeof(object));
+object *makeint(long v) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 0;
     obj->ival = v;
     return obj;
 }
 
-object *make_float(double v) {
-    object *obj = gc_alloc(sizeof(object));
+object *makefloat(double v) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 1;
     obj->fval = v;
     return obj;
 }
 
-object *make_string(char *v) {
-    object *obj = gc_alloc(sizeof(object));
+object *makestring(char *v) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 2;
     obj->sval = strdup(v);
     return obj;
 }
 
-object *make_bool(int v) {
-    object *obj = gc_alloc(sizeof(object));
+object *makebool(int v) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 3;
     obj->bval = v;
     return obj;
 }
 
-object *make_none(void) {
-    object *obj = gc_alloc(sizeof(object));
+object *makenone(void) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 4;
     return obj;
 }
 
-object *make_list(void) {
-    object *obj = gc_alloc(sizeof(object));
+object *makelist(void) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 5;
     obj->list.cap = 4;
     obj->list.count = 0;
@@ -43,8 +43,8 @@ object *make_list(void) {
     return obj;
 }
 
-object *make_dict(void) {
-    object *obj = gc_alloc(sizeof(object));
+object *makedict(void) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 6;
     obj->dict.count = 0;
     obj->dict.keys = malloc(sizeof(char*) * 4);
@@ -53,8 +53,8 @@ object *make_dict(void) {
     return obj;
 }
 
-object *make_func(char **params, int pcount, stmt **body, int bcount, environment *closure, char *name) {
-    object *obj = gc_alloc(sizeof(object));
+object *makefunc(char **params, int pcount, stmt **body, int bcount, environment *closure, char *name) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 7;
     obj->func.params = malloc(sizeof(char*) * pcount);
     for (int i = 0; i < pcount; i++) obj->func.params[i] = strdup(params[i]);
@@ -66,15 +66,15 @@ object *make_func(char **params, int pcount, stmt **body, int bcount, environmen
     return obj;
 }
 
-object *make_builtin(void *(*fn)(object**, int, environment*)) {
-    object *obj = gc_alloc(sizeof(object));
+object *makebuiltin(void *(*fn)(object**, int, environment*)) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 8;
     obj->builtin.fn = fn;
     return obj;
 }
 
-object *make_class(char *name, environment *attrs, object *super) {
-    object *obj = gc_alloc(sizeof(object));
+object *makeclass(char *name, environment *attrs, object *super) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 9;
     obj->klass.name = strdup(name);
     obj->klass.attrs = attrs;
@@ -82,16 +82,16 @@ object *make_class(char *name, environment *attrs, object *super) {
     return obj;
 }
 
-object *make_instance(object *klass) {
-    object *obj = gc_alloc(sizeof(object));
+object *makeinstance(object *klass) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 10;
     obj->instance.klass = klass;
-    obj->instance.attrs = env_new(NULL);
+    obj->instance.attrs = envnew(NULL);
     return obj;
 }
 
-object *make_range(long start, long stop, long step) {
-    object *obj = gc_alloc(sizeof(object));
+object *makerange(long start, long stop, long step) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 11;
     obj->range.start = start;
     obj->range.stop = stop;
@@ -100,18 +100,18 @@ object *make_range(long start, long stop, long step) {
     return obj;
 }
 
-object *make_module(char *name, void *handle) {
-    object *obj = gc_alloc(sizeof(object));
+object *makemodule(char *name, void *handle) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 12;
     obj->module.name = name ? strdup(name) : NULL;
     obj->module.version = NULL;
-    obj->module.exports = env_new(NULL);
+    obj->module.exports = envnew(NULL);
     obj->module.handle = handle;
     return obj;
 }
 
-object *make_native(void *handle, void *data) {
-    object *obj = gc_alloc(sizeof(object));
+object *makenative(void *handle, void *data) {
+    object *obj = gcalloc(sizeof(object));
     obj->type = 13;
     obj->native.handle = handle;
     obj->native.data = data;
