@@ -1,7 +1,9 @@
 #include "../core/axton.h"
-
-#ifdef HAVE_SQLITE
 #include <sqlite3.h>
+
+typedef struct {
+    sqlite3 *db;
+} dbconn;
 
 object *dbconnect(char *path) {
     sqlite3 *db;
@@ -9,8 +11,8 @@ object *dbconnect(char *path) {
         throwexception(sqlite3_errmsg(db));
         return NULL;
     }
-    object *obj = makemodule("dbconn", NULL);
-    obj->native.handle = db;
+    object *obj = makenative(db, NULL);
+    obj->type = 13;
     return obj;
 }
 
@@ -40,31 +42,14 @@ object *dbexecute(object *conn, char *sql) {
     sqlite3 *db = (sqlite3*)conn->native.handle;
     char *errmsg;
     if (sqlite3_exec(db, sql, NULL, NULL, &errmsg) != SQLITE_OK) {
-        throwexception(errmsg);
+        char err[256];
+        snprintf(err, sizeof(err), "sqlite error: %s", errmsg);
         sqlite3_free(errmsg);
+        throwexception(err);
         return makeint(0);
     }
     return makeint(sqlite3_changes(db));
 }
-
-#else
-
-object *dbconnect(char *path) {
-    throwexception("sqlite not available");
-    return NULL;
-}
-
-object *dbquery(object *conn, char *sql) {
-    throwexception("sqlite not available");
-    return NULL;
-}
-
-object *dbexecute(object *conn, char *sql) {
-    throwexception("sqlite not available");
-    return NULL;
-}
-
-#endif
 
 object *builtindbconnect(object **args, int argc, environment *env) {
     if (argc < 1) throwexception("db.connect needs path");
