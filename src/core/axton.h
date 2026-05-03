@@ -29,6 +29,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/epoll.h>
+#include <sys/time.h>
 #define PATHSEP '/'
 #endif
 
@@ -156,7 +158,13 @@ typedef struct object {
         struct {
             struct object *func;
             int state;
+            void *frame;
         } coroutine;
+        struct {
+            struct object *tasks;
+            int fd;
+            int running;
+        } eventloop;
     };
 } object;
 
@@ -187,6 +195,12 @@ typedef struct {
     int (*writefile)(const char*, const char*);
     void *(*loadlib)(const char*);
     void *(*getproc)(void*, const char*);
+    int (*socket)(void);
+    int (*bind)(int, int);
+    int (*listen)(int, int);
+    int (*accept)(int);
+    int (*send)(int, const char*, int);
+    int (*recv)(int, char*, int);
 } platformapi;
 
 extern environment *globalenv;
@@ -215,6 +229,7 @@ object *makemodule(char *name, void *handle);
 object *makenative(void *handle, void *data);
 object *maketensor(float *data, int rows, int cols);
 object *makecoroutine(object *func);
+object *makeeventloop(void);
 
 void listappend(object *list, object *item);
 object *listget(object *list, long idx);
@@ -265,5 +280,11 @@ char *platformreadfile(const char *path);
 int platformwritefile(const char *path, const char *content);
 void *platformloadlib(const char *path);
 void *platformgetproc(void *lib, const char *name);
+int platformsocket(void);
+int platformbind(int fd, int port);
+int platformlisten(int fd, int backlog);
+int platformaccept(int fd);
+int platformsend(int fd, const char *data, int len);
+int platformrecv(int fd, char *buf, int len);
 
 #endif
