@@ -1,4 +1,5 @@
 #include "axton.h"
+#include "../libs/register.c"
 
 object *builtinprint(object **args, int argc, environment *env) {
     for (int i = 0; i < argc; i++) {
@@ -14,6 +15,8 @@ object *builtinprint(object **args, int argc, environment *env) {
             platformlog(buf);
         }
         else if (args[i]->type == 3) platformlog(args[i]->bval ? "true" : "false");
+        else if (args[i]->type == 5) platformlog("list");
+        else if (args[i]->type == 6) platformlog("dict");
         else platformlog("none");
         if (i < argc - 1) platformlog(" ");
     }
@@ -103,7 +106,10 @@ object *builtintype(object **args, int argc, environment *env) {
         case 6: return makestring("dict");
         case 7: return makestring("function");
         case 9: return makestring("class");
+        case 10: return makestring("instance");
+        case 11: return makestring("range");
         case 20: return makestring("tensor");
+        case 21: return makestring("coroutine");
         default: return makestring("object");
     }
 }
@@ -140,6 +146,31 @@ object *builtinwritefile(object **args, int argc, environment *env) {
     return makebool(result);
 }
 
+object *builtinimport(object **args, int argc, environment *env) {
+    if (argc < 1) throwexception("import needs module name");
+    char *name = args[0]->sval;
+    char path[512];
+    snprintf(path, sizeof(path), "%s.ax", name);
+    char *source = platformreadfile(path);
+    if (!source) {
+        snprintf(path, sizeof(path), "lib/%s.ax", name);
+        source = platformreadfile(path);
+    }
+    if (!source) {
+        throwexception("module not found");
+        return NULL;
+    }
+    token *toks = tokenize(source);
+    stmt *prog = parsetokens(toks, tcount);
+    environment *modenv = envnew(globalenv);
+    evalprogram(prog, modenv);
+    object *mod = makemodule(name, NULL);
+    mod->module.exports = modenv;
+    free(source);
+    envset(env, name, mod, 0);
+    return mod;
+}
+
 void registerstdlib(environment *env) {
     envset(env, "print", makebuiltin(builtinprint), 0);
     envset(env, "len", makebuiltin(builtinlen), 0);
@@ -154,4 +185,6 @@ void registerstdlib(environment *env) {
     envset(env, "time", makebuiltin(builtintime), 0);
     envset(env, "readfile", makebuiltin(builtinreadfile), 0);
     envset(env, "writefile", makebuiltin(builtinwritefile), 0);
+    envset(env, "import", makebuiltin(builtinimport), 0);
+    registeralllibs(env);
 }
