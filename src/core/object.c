@@ -117,3 +117,30 @@ object *makenative(void *handle, void *data) {
     obj->native.data = data;
     return obj;
 }
+
+object *maketensor(float *data, int rows, int cols) {
+    object *obj = gcalloc(sizeof(object));
+    obj->type = 20;
+    obj->tensor.data = data;
+    obj->tensor.rows = rows;
+    obj->tensor.cols = cols;
+    return obj;
+}
+
+object *makecoroutine(object *func) {
+    object *obj = gcalloc(sizeof(object));
+    obj->type = 21;
+    obj->coroutine.func = func;
+    obj->coroutine.state = 0;
+    obj->coroutine.frame = NULL;
+    return obj;
+}
+
+object *makeeventloop(void) {
+    object *obj = gcalloc(sizeof(object));
+    obj->type = 22;
+    obj->eventloop.tasks = NULL;
+    obj->eventloop.fd = -1;
+    obj->eventloop.running = 0;
+    return obj;
+}
