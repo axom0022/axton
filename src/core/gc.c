@@ -43,6 +43,12 @@ void gcmark(object *obj) {
             if (e->values[i]) gcmark(e->values[i]);
         }
     }
+    if (obj->type == 20 && obj->tensor.data) {
+        free(obj->tensor.data);
+    }
+    if (obj->type == 21 && obj->coroutine.func) {
+        gcmark(obj->coroutine.func);
+    }
 }
 
 static void markroots(void) {
@@ -61,6 +67,13 @@ static void sweep(void) {
             if (obj->prev) obj->prev->next = obj->next;
             if (obj->next) obj->next->prev = obj->prev;
             if (allobjs == obj) allobjs = obj->next;
+            if (obj->type == 2 && obj->sval) free(obj->sval);
+            if (obj->type == 5 && obj->list.items) free(obj->list.items);
+            if (obj->type == 6 && obj->dict.keys) free(obj->dict.keys);
+            if (obj->type == 6 && obj->dict.keyvals) free(obj->dict.keyvals);
+            if (obj->type == 6 && obj->dict.vals) free(obj->dict.vals);
+            if (obj->type == 7 && obj->func.params) free(obj->func.params);
+            if (obj->type == 20 && obj->tensor.data) free(obj->tensor.data);
             free(obj);
             objcount--;
         } else {
