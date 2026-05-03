@@ -1,0 +1,93 @@
+print("welcome to axton")
+
+let add = fn(a, b) {
+    return a + b
+}
+
+print("3 + 5 = " + str(add(3, 5)))
+
+let numbers = [1, 2, 3, 4, 5]
+print("list: " + str(numbers))
+print("length: " + str(len(numbers)))
+
+let person = class {
+    let init = fn(name) {
+        let this.name = name
+    }
+    let greet = fn() {
+        print("hello " + this.name)
+    }
+}
+
+let alice = person("alice")
+alice.greet()
+
+let counter = 0
+while counter < 3 {
+    print("while count: " + str(counter))
+    counter = counter + 1
+}
+
+for i in range(5) {
+    print("for count: " + str(i))
+}
+
+let fib = fn(n) {
+    if n <= 1 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+print("fib(8) = " + str(fib(8)))
+
+let data = {"name": "axton", "version": "2.0"}
+print("dict: " + str(data))
+print("name: " + data["name"])
+
+try {
+    throw("test exception")
+} catch e {
+    print("caught: " + e)
+} finally {
+    print("finally block")
+}
+
+let square = fn(x) {
+    return x * x
+}
+
+let result = square(7)
+print("square of 7 is " + str(result))
+
+let isbig = fn(x) {
+    if x > 10 {
+        return "big"
+    } else {
+        return "small"
+    }
+}
+
+print("15 is " + isbig(15))
+print("5 is " + isbig(5))
+
+let sumlist = fn(lst) {
+    let total = 0
+    for i in lst {
+        total = total + i
+    }
+    return total
+}
+
+print("sum of 1 to 5 is " + str(sumlist([1, 2, 3, 4, 5])))
+
+let factorial = fn(n) {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+print("factorial of 5 is " + str(factorial(5)))
+
+print("all examples completed successfully")
