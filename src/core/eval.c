@@ -1,4 +1,5 @@
 #include "axton.h"
+#include <math.h>
 
 static object *evalexpr(expr *e, environment *env);
 static object *evalstmt(stmt *s, environment *env);
@@ -7,29 +8,33 @@ static object *evalbinary(binaryexpr *e, environment *env) {
     object *left = evalexpr(e->left, env);
     object *right = evalexpr(e->right, env);
     switch (e->op) {
-        case tokplus: return addvalues(left, right);
-        case tokminus: return subvalues(left, right);
-        case tokstar: return mulvalues(left, right);
-        case tokslash: return divvalues(left, right);
-        case tokeqeq: return makebool(valuesequal(left, right));
-        case tokne: return makebool(!valuesequal(left, right));
-        case toklt: return makebool(lessthan(left, right));
-        case tokgt: return makebool(greaterthan(left, right));
-        case tokand: return istruthy(left) ? right : left;
-        case tokor: return istruthy(left) ? left : right;
-        default: throwexception("bad operator"); return NULL;
+        case TOKPLUS: return addvalues(left, right);
+        case TOKMINUS: return subvalues(left, right);
+        case TOKSTAR: return mulvalues(left, right);
+        case TOKSLASH: return divvalues(left, right);
+        case TOKEQEQ: return makebool(valuesequal(left, right));
+        case TOKNE: return makebool(!valuesequal(left, right));
+        case TOKLT: return makebool(lessthan(left, right));
+        case TOKGT: return makebool(greaterthan(left, right));
+        case TOKLE: return makebool(!greaterthan(left, right));
+        case TOKGE: return makebool(!lessthan(left, right));
+        case TOKAND: return istruthy(left) ? right : left;
+        case TOKOR: return istruthy(left) ? left : right;
+        default:
+            throwexception("unknown binary operator");
+            return NULL;
     }
 }
 
 static object *evalunary(unaryexpr *e, environment *env) {
     object *operand = evalexpr(e->operand, env);
-    if (e->op == toknot) return makebool(!istruthy(operand));
-    if (e->op == tokminus) {
+    if (e->op == TOKNOT) return makebool(!istruthy(operand));
+    if (e->op == TOKMINUS) {
         if (operand->type == 0) return makeint(-operand->ival);
         if (operand->type == 1) return makefloat(-operand->fval);
-        throwexception("bad operand for minus");
+        throwexception("bad operand for unary minus");
     }
-    throwexception("bad unary");
+    throwexception("unknown unary operator");
     return NULL;
 }
 
@@ -71,6 +76,52 @@ static object *evalcall(callexpr *e, environment *env) {
     return result;
 }
 
+static object *evalindex(indexexpr *e, environment *env) {
+    object *target = evalexpr(e->target, env);
+    object *idx = evalexpr(e->index, env);
+    if (target->type == 5) {
+        if (idx->type != 0) throwexception("list index must be integer");
+        long i = idx->ival;
+        if (i < 0) i = target->list.count + i;
+        if (i < 0 || i >= target->list.count) throwexception("index out of range");
+        return target->list.items[i];
+    }
+    if (target->type == 6) {
+        object *val = dictget(target, idx);
+        if (!val) throwexception("key not found");
+        return val;
+    }
+    if (target->type == 2) {
+        if (idx->type != 0) throwexception("string index must be integer");
+        long i = idx->ival;
+        char c = target->sval[i];
+        char buf[2] = {c, 0};
+        return makestring(buf);
+    }
+    throwexception("cannot index");
+    return NULL;
+}
+
+static object *evalattr(attribexpr *e, environment *env) {
+    object *target = evalexpr(e->target, env);
+    if (target->type == 9 && target->klass.attrs) {
+        object *val = envget((environment*)target->klass.attrs, e->attr);
+        if (val) return val;
+    }
+    if (target->type == 10 && target->instance.attrs) {
+        object *val = envget((environment*)target->instance.attrs, e->attr);
+        if (val) return val;
+    }
+    if (target->type == 12 && target->module.exports) {
+        object *val = envget((environment*)target->module.exports, e->attr);
+        if (val) return val;
+    }
+    char msg[256];
+    snprintf(msg, sizeof(msg), "attribute '%s' not found", e->attr);
+    throwexception(msg);
+    return NULL;
+}
+
 static object *evalexpr(expr *e, environment *env) {
     if (((binaryexpr*)e)->op) return evalbinary((binaryexpr*)e, env);
     if (((unaryexpr*)e)->op) return evalunary((unaryexpr*)e, env);
@@ -80,17 +131,19 @@ static object *evalexpr(expr *e, environment *env) {
     if (((boolexpr*)e)->value) return evalbool((boolexpr*)e, env);
     if (((noneexpr*)e)) return evalnone((noneexpr*)e, env);
     if (((callexpr*)e)->callee) return evalcall((callexpr*)e, env);
+    if (((indexexpr*)e)->target) return evalindex((indexexpr*)e, env);
+    if (((attribexpr*)e)->attr) return evalattr((attribexpr*)e, env);
     throwexception("unknown expression");
     return NULL;
 }
 
-static object *evallet(letstmt *s, environment *env) {
+static object *evallet(letexpr *s, environment *env) {
     object *val = evalexpr(s->value, env);
     envset(env, s->name, val, s->isconst);
     return makenone();
 }
 
-static object *evalreturn(returnstmt *s, environment *env) {
+static object *evalreturn(returnexpr *s, environment *env) {
     object *val = s->value ? evalexpr(s->value, env) : makenone();
     if (currentframe) {
         currentframe->result = val;
@@ -99,11 +152,11 @@ static object *evalreturn(returnstmt *s, environment *env) {
     return val;
 }
 
-static object *evalif(ifstmt *s, environment *env) {
+static object *evalif(ifexpr *s, environment *env) {
     if (istruthy(evalexpr(s->cond, env))) {
         environment *blockenv = envnew(env);
         for (int i = 0; i < s->body->count; i++) {
-                        evalstmt(s->body->items[i], blockenv);
+            evalstmt(s->body->items[i], blockenv);
         }
         return makenone();
     }
@@ -125,7 +178,7 @@ static object *evalif(ifstmt *s, environment *env) {
     return makenone();
 }
 
-static object *evalwhile(whilestmt *s, environment *env) {
+static object *evalwhile(whileexpr *s, environment *env) {
     while (istruthy(evalexpr(s->cond, env))) {
         environment *blockenv = envnew(env);
         for (int i = 0; i < s->body->count; i++) {
@@ -135,19 +188,18 @@ static object *evalwhile(whilestmt *s, environment *env) {
     return makenone();
 }
 
-static object *evalfor(forstmt *s, environment *env) {
+static object *evalfor(forexp *s, environment *env) {
     object *iterable = evalexpr(s->iter, env);
     object *list = NULL;
     if (iterable->type == 11) {
         list = makelist();
-        long step = iterable->range.step > 0 ? 1 : -1;
-        for (long i = iterable->range.start; i < iterable->range.stop; i += step) {
+        for (long i = iterable->range.start; i < iterable->range.stop; i += iterable->range.step) {
             listappend(list, makeint(i));
         }
     } else if (iterable->type == 5) {
         list = iterable;
     } else {
-        throwexception("for needs iterable");
+        throwexception("for loop expects iterable");
         return NULL;
     }
     for (int i = 0; i < list->list.count; i++) {
@@ -160,21 +212,21 @@ static object *evalfor(forstmt *s, environment *env) {
     return makenone();
 }
 
-static object *evalbreak(breakstmt *s, environment *env) {
+static object *evalbreak(breakexp *s, environment *env) {
     return makenone();
 }
 
-static object *evalnext(nextstmt *s, environment *env) {
+static object *evalnext(nextexp *s, environment *env) {
     return makenone();
 }
 
-static object *evalfn(fnstmt *s, environment *env) {
-    object *fn = makefunc(s->params, s->pcount, (stmt**)s->body->items, s->body->count, env, s->name);
+static object *evalfn(fnexp *s, environment *env) {
+    object *fn = makefunc(s->params, NULL, s->pcount, (stmt**)s->body->items, s->body->count, env, s->name, 0, 0);
     envset(env, s->name, fn, 0);
     return makenone();
 }
 
-static object *evalclass(classstmt *s, environment *env) {
+static object *evalclass(classexp *s, environment *env) {
     environment *classenv = envnew(env);
     for (int i = 0; i < s->body->count; i++) {
         evalstmt(s->body->items[i], classenv);
@@ -189,16 +241,16 @@ static object *evalexprstmt(exprstmt *s, environment *env) {
 }
 
 static object *evalstmt(stmt *s, environment *env) {
-    if (((letstmt*)s)->name) return evallet((letstmt*)s, env);
-    if (((returnstmt*)s)->value != NULL || ((returnstmt*)s)->value == NULL)
-        return evalreturn((returnstmt*)s, env);
-    if (((ifstmt*)s)->cond) return evalif((ifstmt*)s, env);
-    if (((whilestmt*)s)->cond) return evalwhile((whilestmt*)s, env);
-    if (((forstmt*)s)->var) return evalfor((forstmt*)s, env);
-    if (((breakstmt*)s)) return evalbreak((breakstmt*)s, env);
-    if (((nextstmt*)s)) return evalnext((nextstmt*)s, env);
-    if (((fnstmt*)s)->name) return evalfn((fnstmt*)s, env);
-    if (((classstmt*)s)->name) return evalclass((classstmt*)s, env);
+    if (((letexpr*)s)->name) return evallet((letexpr*)s, env);
+    if (((returnexpr*)s)->value != NULL || ((returnexpr*)s)->value == NULL) 
+        return evalreturn((returnexpr*)s, env);
+    if (((ifexpr*)s)->cond) return evalif((ifexpr*)s, env);
+    if (((whileexpr*)s)->cond) return evalwhile((whileexpr*)s, env);
+    if (((forexp*)s)->var) return evalfor((forexp*)s, env);
+    if (((breakexp*)s)) return evalbreak((breakexp*)s, env);
+    if (((nextexp*)s)) return evalnext((nextexp*)s, env);
+    if (((fnexp*)s)->name) return evalfn((fnexp*)s, env);
+    if (((classexp*)s)->name) return evalclass((classexp*)s, env);
     if (((exprstmt*)s)->expression) return evalexprstmt((exprstmt*)s, env);
     throwexception("unknown statement");
     return NULL;
@@ -209,7 +261,10 @@ object *callfunc(object *fn, object **args, int argc, environment *env) {
         return fn->builtin.fn(args, argc, env);
     }
     if (fn->type == 7) {
-        if (argc != fn->func.pcount) throwexception("wrong argument count");
+        if (argc != fn->func.pcount) {
+            throwexception("wrong number of arguments");
+            return NULL;
+        }
         environment *callenv = envnew(fn->func.closure);
         for (int i = 0; i < argc; i++) {
             envset(callenv, fn->func.params[i], args[i], 0);
@@ -229,14 +284,14 @@ object *callfunc(object *fn, object **args, int argc, environment *env) {
         return result;
     }
     if (fn->type == 9) {
-        object *inst = makeinstance(fn);
+        object *inst = makeinstance(fn, args, argc);
         object *init = envget(fn->klass.attrs, "init");
         if (init && init->type == 7) {
             callfunc(init, args, argc, fn->klass.attrs);
         }
         return inst;
     }
-    throwexception("not callable");
+    throwexception("object is not callable");
     return NULL;
 }
 
