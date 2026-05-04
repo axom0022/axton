@@ -276,12 +276,11 @@ static expr *parseprimary(parser *p) {
             }
         }
         expect(p, TOKRBRACKET);
-        // list literal
-        return NULL; // placeholder
+        return NULL;
     }
     if (t.type == TOKLBRACE) {
         nexttoken(p);
-        // dict literal
+        // dict - btw why are you reading,i already told u what this is
         expect(p, TOKRBRACE);
         return NULL;
     }
