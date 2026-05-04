@@ -20,9 +20,10 @@ void registerwebsocketlib(environment *env);
 void registerhttpslib(environment *env);
 void registerormlib(environment *env);
 void registernumpylib(environment *env);
-void registerpandaslib(environment *env);
-void registerplotlib(environment *env);
-void registertestlib(environment *env);
+void registervectorlib(environment *env);
+void registerdataclasslib(environment *env);
+void registerpropertylib(environment *env);
+void registerenumlib(environment *env);
 
 void registeralllibs(environment *env) {
     registermathlib(env);
@@ -45,7 +46,8 @@ void registeralllibs(environment *env) {
     registerhttpslib(env);
     registerormlib(env);
     registernumpylib(env);
-    registerpandaslib(env);
-    registerplotlib(env);
-    registertestlib(env);
+    registervectorlib(env);
+    registerdataclasslib(env);
+    registerpropertylib(env);
+    registerenumlib(env);
 }
