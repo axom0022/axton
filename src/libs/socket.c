@@ -3,27 +3,23 @@
 #include <netdb.h>
 #include <fcntl.h>
 
-static int setnonblock(int fd) {
-#ifdef _WIN32
-    unsigned long mode = 1;
-    return ioctlsocket(fd, FIONBIO, &mode);
-#else
+static void setnonblock(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
-    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-#endif
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-object *socket_create(object **args, int argc, void *env) {
+object *socketcreate(object **a, int c, void *e) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) throwexception("socket failed");
     return makeint(fd);
 }
 
-object *socket_connect(object **args, int argc, void *env) {
-    if (argc < 3) throwexception("connect needs fd, host, port");
-    int fd = args[0]->ival;
-    char *host = args[1]->sval;
-    int port = args[2]->ival;
+object *socketconnect(object **a, int c, void *e) {
+    if (c < 3 || a[0]->type != 0 || a[1]->type != 2 || a[2]->type != 0)
+        throwexception("connect needs fd host port");
+    int fd = a[0]->ival;
+    char *host = a[1]->sval;
+    int port = a[2]->ival;
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -35,18 +31,20 @@ object *socket_connect(object **args, int argc, void *env) {
     return makeint(0);
 }
 
-object *socket_send(object **args, int argc, void *env) {
-    if (argc < 2) throwexception("send needs fd and data");
-    int fd = args[0]->ival;
-    char *data = args[1]->sval;
+object *socketsend(object **a, int c, void *e) {
+    if (c < 2 || a[0]->type != 0 || a[1]->type != 2)
+        throwexception("send needs fd and data");
+    int fd = a[0]->ival;
+    char *data = a[1]->sval;
     int sent = send(fd, data, strlen(data), 0);
     return makeint(sent);
 }
 
-object *socket_recv(object **args, int argc, void *env) {
-    if (argc < 2) throwexception("recv needs fd and size");
-    int fd = args[0]->ival;
-    int size = args[1]->ival;
+object *socketrecv(object **a, int c, void *e) {
+    if (c < 2 || a[0]->type != 0 || a[1]->type != 0)
+        throwexception("recv needs fd and size");
+    int fd = a[0]->ival;
+    int size = a[1]->ival;
     char *buf = malloc(size + 1);
     int n = recv(fd, buf, size, 0);
     if (n <= 0) { free(buf); return makestring(""); }
@@ -56,20 +54,17 @@ object *socket_recv(object **args, int argc, void *env) {
     return res;
 }
 
-object *socket_close(object **args, int argc, void *env) {
-    if (argc < 1) throwexception("close needs fd");
-#ifdef _WIN32
-    closesocket(args[0]->ival);
-#else
-    close(args[0]->ival);
-#endif
+object *socketclose(object **a, int c, void *e) {
+    if (c < 1 || a[0]->type != 0) throwexception("close needs fd");
+    close(a[0]->ival);
     return makenone();
 }
 
-object *socket_bind(object **args, int argc, void *env) {
-    if (argc < 3) throwexception("bind needs fd, port");
-    int fd = args[0]->ival;
-    int port = args[1]->ival;
+object *socketbind(object **a, int c, void *e) {
+    if (c < 2 || a[0]->type != 0 || a[1]->type != 0)
+        throwexception("bind needs fd and port");
+    int fd = a[0]->ival;
+    int port = a[1]->ival;
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
@@ -79,16 +74,15 @@ object *socket_bind(object **args, int argc, void *env) {
     return makenone();
 }
 
-object *socket_listen(object **args, int argc, void *env) {
-    if (argc < 1) throwexception("listen needs fd");
-    int fd = args[0]->ival;
-    if (listen(fd, 10) < 0) throwexception("listen failed");
+object *socketlisten(object **a, int c, void *e) {
+    if (c < 1 || a[0]->type != 0) throwexception("listen needs fd");
+    if (listen(a[0]->ival, 10) < 0) throwexception("listen failed");
     return makenone();
 }
 
-object *socket_accept(object **args, int argc, void *env) {
-    if (argc < 1) throwexception("accept needs fd");
-    int fd = args[0]->ival;
+object *socketaccept(object **a, int c, void *e) {
+    if (c < 1 || a[0]->type != 0) throwexception("accept needs fd");
+    int fd = a[0]->ival;
     struct sockaddr_in client;
     socklen_t len = sizeof(client);
     int clientfd = accept(fd, (struct sockaddr*)&client, &len);
@@ -99,13 +93,13 @@ object *socket_accept(object **args, int argc, void *env) {
 
 void registersocketlib(environment *env) {
     object *mod = makemodule("socket", NULL);
-    envset(mod->module.exports, "socket", makebuiltin(socket_create), 0);
-    envset(mod->module.exports, "connect", makebuiltin(socket_connect), 0);
-    envset(mod->module.exports, "send", makebuiltin(socket_send), 0);
-    envset(mod->module.exports, "recv", makebuiltin(socket_recv), 0);
-    envset(mod->module.exports, "close", makebuiltin(socket_close), 0);
-    envset(mod->module.exports, "bind", makebuiltin(socket_bind), 0);
-    envset(mod->module.exports, "listen", makebuiltin(socket_listen), 0);
-    envset(mod->module.exports, "accept", makebuiltin(socket_accept), 0);
+    envset(mod->module.exports, "socket", makebuiltin(socketcreate), 0);
+    envset(mod->module.exports, "connect", makebuiltin(socketconnect), 0);
+    envset(mod->module.exports, "send", makebuiltin(socketsend), 0);
+    envset(mod->module.exports, "recv", makebuiltin(socketrecv), 0);
+    envset(mod->module.exports, "close", makebuiltin(socketclose), 0);
+    envset(mod->module.exports, "bind", makebuiltin(socketbind), 0);
+    envset(mod->module.exports, "listen", makebuiltin(socketlisten), 0);
+    envset(mod->module.exports, "accept", makebuiltin(socketaccept), 0);
     envset(env, "socket", mod, 0);
 }
