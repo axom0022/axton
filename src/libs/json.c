@@ -1,5 +1,5 @@
 #include "../core/axton.h"
-
+. 
 static object *jsonparse(char *s, int *pos) {
     while (s[*pos] == ' ' || s[*pos] == '\t' || s[*pos] == '\n') (*pos)++;
     if (s[*pos] == '"') {
