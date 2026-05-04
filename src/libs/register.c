@@ -24,6 +24,10 @@ void registervectorlib(environment *env);
 void registerdataclasslib(environment *env);
 void registerpropertylib(environment *env);
 void registerenumlib(environment *env);
+void registerdatetimelib(environment *env);
+void registerhashliblib(environment *env);
+void registersubprocesslib(environment *env);
+void registersocketlib(environment *env);
 
 void registeralllibs(environment *env) {
     registermathlib(env);
@@ -50,4 +54,8 @@ void registeralllibs(environment *env) {
     registerdataclasslib(env);
     registerpropertylib(env);
     registerenumlib(env);
+    registerdatetimelib(env);
+    registerhashliblib(env);
+    registersubprocesslib(env);
+    registersocketlib(env);
 }
