@@ -400,4 +400,4 @@ int platformsetenv(const char *name, const char *value);
 void platformexit(int code);
 int platformkill(int pid, int sig);
 
-#endif
+#endif   slso
