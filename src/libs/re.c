@@ -1,48 +1,45 @@
 #include "../core/axton.h"
 #include <regex.h>
 
-object *builtinrematch(object **args, int argc, environment *env) {
-    if (argc < 2) throwexception("re.match needs pattern and string");
-    regex_t regex;
-    if (regcomp(&regex, args[0]->sval, REG_EXTENDED) != 0) {
+object *rematch(object **a, int c, void *e) {
+    if (c < 2 || a[0]->type != 2 || a[1]->type != 2)
+        throwexception("match needs pattern and string");
+    regex_t re;
+    if (regcomp(&re, a[0]->sval, REG_EXTENDED) != 0)
         throwexception("invalid regex");
-        return NULL;
-    }
-    int result = regexec(&regex, args[1]->sval, 0, NULL, 0);
-    regfree(&regex);
-    return makebool(result == 0);
+    int res = regexec(&re, a[1]->sval, 0, NULL, 0);
+    regfree(&re);
+    return makebool(res == 0);
 }
 
-object *builtinresearch(object **args, int argc, environment *env) {
-    if (argc < 2) throwexception("re.search needs pattern and string");
-    regex_t regex;
-    if (regcomp(&regex, args[0]->sval, REG_EXTENDED) != 0) {
+object *research(object **a, int c, void *e) {
+    if (c < 2) throwexception("search needs pattern and string");
+    regex_t re;
+    if (regcomp(&re, a[0]->sval, REG_EXTENDED) != 0)
         throwexception("invalid regex");
-        return NULL;
-    }
     regmatch_t match;
-    int result = regexec(&regex, args[1]->sval, 1, &match, 0);
-    regfree(&regex);
-    if (result != 0) return makenone();
+    int res = regexec(&re, a[1]->sval, 1, &match, 0);
+    regfree(&re);
+    if (res != 0) return makenone();
     int len = match.rm_eo - match.rm_so;
-    char *matched = malloc(len + 1);
-    memcpy(matched, args[1]->sval + match.rm_so, len);
-    matched[len] = 0;
-    return makestring(matched);
+    char *found = malloc(len + 1);
+    memcpy(found, a[1]->sval + match.rm_so, len);
+    found[len] = 0;
+    object *result = makestring(found);
+    free(found);
+    return result;
 }
 
-object *builtinrefindall(object **args, int argc, environment *env) {
-    if (argc < 2) throwexception("re.findall needs pattern and string");
-    regex_t regex;
-    if (regcomp(&regex, args[0]->sval, REG_EXTENDED) != 0) {
+object *refindall(object **a, int c, void *e) {
+    if (c < 2) throwexception("findall needs pattern and string");
+    regex_t re;
+    if (regcomp(&re, a[0]->sval, REG_EXTENDED) != 0)
         throwexception("invalid regex");
-        return NULL;
-    }
     object *list = makelist();
-    const char *str = args[1]->sval;
+    const char *str = a[1]->sval;
     regmatch_t match;
     int offset = 0;
-    while (regexec(&regex, str + offset, 1, &match, 0) == 0) {
+    while (regexec(&re, str + offset, 1, &match, 0) == 0) {
         int len = match.rm_eo - match.rm_so;
         char *found = malloc(len + 1);
         memcpy(found, str + offset + match.rm_so, len);
@@ -51,48 +48,44 @@ object *builtinrefindall(object **args, int argc, environment *env) {
         offset += match.rm_eo;
         if (match.rm_so == match.rm_eo) break;
     }
-    regfree(&regex);
+    regfree(&re);
     return list;
 }
 
-object *builtinresub(object **args, int argc, environment *env) {
-    if (argc < 3) throwexception("re.sub needs pattern, repl, string");
-    regex_t regex;
-    if (regcomp(&regex, args[0]->sval, REG_EXTENDED) != 0) {
+object *resub(object **a, int c, void *e) {
+    if (c < 3) throwexception("sub needs pattern repl string");
+    regex_t re;
+    if (regcomp(&re, a[0]->sval, REG_EXTENDED) != 0)
         throwexception("invalid regex");
-        return NULL;
-    }
-    char *result = malloc(strlen(args[2]->sval) + 256);
+    char *result = malloc(strlen(a[2]->sval) + 256);
     char *ptr = result;
-    const char *str = args[2]->sval;
+    const char *str = a[2]->sval;
     regmatch_t match;
     int offset = 0;
-    while (regexec(&regex, str + offset, 1, &match, 0) == 0) {
+    while (regexec(&re, str + offset, 1, &match, 0) == 0) {
         int len = match.rm_so;
         memcpy(ptr, str + offset, len);
         ptr += len;
-        strcpy(ptr, args[1]->sval);
-        ptr += strlen(args[1]->sval);
+        strcpy(ptr, a[1]->sval);
+        ptr += strlen(a[1]->sval);
         offset += match.rm_eo;
         if (match.rm_so == match.rm_eo) break;
     }
     strcpy(ptr, str + offset);
-    regfree(&regex);
+    regfree(&re);
     return makestring(result);
 }
 
-object *builtinresplit(object **args, int argc, environment *env) {
-    if (argc < 2) throwexception("re.split needs pattern and string");
-    regex_t regex;
-    if (regcomp(&regex, args[0]->sval, REG_EXTENDED) != 0) {
+object *resplit(object **a, int c, void *e) {
+    if (c < 2) throwexception("split needs pattern and string");
+    regex_t re;
+    if (regcomp(&re, a[0]->sval, REG_EXTENDED) != 0)
         throwexception("invalid regex");
-        return NULL;
-    }
     object *list = makelist();
-    const char *str = args[1]->sval;
+    const char *str = a[1]->sval;
     regmatch_t match;
     int offset = 0;
-    while (regexec(&regex, str + offset, 1, &match, 0) == 0) {
+    while (regexec(&re, str + offset, 1, &match, 0) == 0) {
         int len = match.rm_so;
         char *part = malloc(len + 1);
         memcpy(part, str + offset, len);
@@ -102,31 +95,28 @@ object *builtinresplit(object **args, int argc, environment *env) {
         if (match.rm_so == match.rm_eo) break;
     }
     listappend(list, makestring(str + offset));
-    regfree(&regex);
+    regfree(&re);
     return list;
 }
 
-object *builtinrecompile(object **args, int argc, environment *env) {
-    if (argc < 1) throwexception("re.compile needs pattern");
-    regex_t regex;
-    if (regcomp(&regex, args[0]->sval, REG_EXTENDED) != 0) {
+object *recompile(object **a, int c, void *e) {
+    if (c < 1) throwexception("compile needs pattern");
+    regex_t *re = malloc(sizeof(regex_t));
+    if (regcomp(re, a[0]->sval, REG_EXTENDED) != 0) {
+        free(re);
         throwexception("invalid regex");
-        return NULL;
     }
-    object *obj = makemodule("regex", NULL);
-    obj->type = 24;
-    obj->regexobj.regex = regex;
-    obj->regexobj.pattern = strdup(args[0]->sval);
+    object *obj = makenative(re, free);
     return obj;
 }
 
 void registerrelib(environment *env) {
-    object *remod = makemodule("re", NULL);
-    envset(remod->module.exports, "match", makebuiltin(builtinrematch), 0);
-    envset(remod->module.exports, "search", makebuiltin(builtinresearch), 0);
-    envset(remod->module.exports, "findall", makebuiltin(builtinrefindall), 0);
-    envset(remod->module.exports, "sub", makebuiltin(builtinresub), 0);
-    envset(remod->module.exports, "split", makebuiltin(builtinresplit), 0);
-    envset(remod->module.exports, "compile", makebuiltin(builtinrecompile), 0);
-    envset(env, "re", remod, 0);
+    object *mod = makemodule("re", NULL);
+    envset(mod->module.exports, "match", makebuiltin(rematch), 0);
+    envset(mod->module.exports, "search", makebuiltin(research), 0);
+    envset(mod->module.exports, "findall", makebuiltin(refindall), 0);
+    envset(mod->module.exports, "sub", makebuiltin(resub), 0);
+    envset(mod->module.exports, "split", makebuiltin(resplit), 0);
+    envset(mod->module.exports, "compile", makebuiltin(recompile), 0);
+    envset(env, "re", mod, 0);
 }
