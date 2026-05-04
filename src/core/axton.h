@@ -5,38 +5,31 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <stdarg.h>
 #include <setjmp.h>
 #include <math.h>
 #include <time.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 
 #ifdef _WIN32
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <direct.h>
 #define mkdir(x,y) _mkdir(x)
-#define strcasecmp _stricmp
 #define snprintf _snprintf
 #define PATHSEP '\\'
 #else
 #include <unistd.h>
-#include <dirent.h>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/epoll.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <GL/gl.h>
+#include <GL/glx.h>
 #define PATHSEP '/'
-#endif
-
-#ifdef __ANDROID__
-#include <android/log.h>
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "axton", __VA_ARGS__)
-#else
-#define LOGI(...) printf(__VA_ARGS__)
 #endif
 
 typedef enum {
@@ -47,10 +40,9 @@ typedef enum {
     TOKNONE, TOKTRUE, TOKFALSE, TOKAND, TOKOR, TOKNOT,
     TOKPLUS, TOKMINUS, TOKSTAR, TOKSLASH, TOKPERCENT, TOKPOWER,
     TOKEQ, TOKEQEQ, TOKNE, TOKLT, TOKGT, TOKLE, TOKGE,
-    TOKPLUSEQ, TOKMINUSEQ, TOKSTAREQ, TOKSLASHEQ,
     TOKLPAREN, TOKRPAREN, TOKLBRACKET, TOKRBRACKET,
-    TOKLBRACE, TOKRBRACE, TOKCOMMA, TOKDOT, TOKCOLON, TOKCOLONEQ,
-    TOKCOLONCOLON, TOKARROW, TOKUNDERSCORE,
+    TOKLBRACE, TOKRBRACE, TOKCOMMA, TOKDOT, TOKCOLON,
+    TOKCOLONEQ, TOKCOLONCOLON, TOKARROW, TOKUNDERSCORE,
     TOKTRY, TOKCATCH, TOKFINALLY, TOKTHROW, TOKCLASS, TOKIMPORT,
     TOKASYNC, TOKAWAIT, TOKYIELD, TOKWITH, TOKAS, TOKGLOBAL,
     TOKNONLOCAL, TOKASSERT, TOKDECORATOR, TOKMATCH, TOKCASE
@@ -82,7 +74,6 @@ typedef struct object {
     struct object *next;
     struct object *prev;
     int marked;
-    int refcount;
     int type;
     union {
         long ival;
@@ -110,7 +101,6 @@ typedef struct object {
             char *name;
             int isasync;
             int isgenerator;
-            struct object *decorators;
         } func;
         struct {
             void *(*fn)(struct object**, int, void*);
@@ -119,7 +109,6 @@ typedef struct object {
             char *name;
             void *attrs;
             struct object *bases;
-            struct object *mro;
         } klass;
         struct {
             struct object *klass;
@@ -129,7 +118,6 @@ typedef struct object {
             long start;
             long stop;
             long step;
-            long current;
         } range;
         struct {
             unsigned char *code;
@@ -149,8 +137,6 @@ typedef struct object {
             float *data;
             int rows;
             int cols;
-            int *shape;
-            int ndim;
         } tensor;
         struct {
             struct object *func;
@@ -164,26 +150,20 @@ typedef struct object {
             void *frame;
         } coroutine;
         struct {
-            struct object *enter;
-            struct object *exit;
-        } context;
+            void *display;
+            void *window;
+            void *gc;
+            int w, h;
+        } guiwin;
         struct {
-            struct object *getter;
-            struct object *setter;
-            struct object *deleter;
-        } property;
+            void *display;
+            void *window;
+            void *glc;
+        } glwin;
         struct {
-            char *name;
-            struct object *fields;
-        } dataclass;
-        struct {
-            char *name;
-            int value;
-        } enumval;
-        struct {
-            float *data;
-            int size;
-        } vector;
+            void *data;
+            int w, h;
+        } canvas;
     };
 } object;
 
@@ -191,7 +171,6 @@ typedef struct environment {
     char **names;
     object **values;
     int *isconst;
-    char **typehints;
     int count;
     int cap;
     struct environment *parent;
@@ -207,28 +186,22 @@ typedef struct {
 } frame;
 
 typedef struct {
-    int (*open)(const char*);
-    void (*close)(void);
-    void (*log)(const char*);
-    void (*sleep)(double);
+    int (*log)(const char*);
     double (*time)(void);
+    void (*sleep)(double);
     char *(*readfile)(const char*);
     int (*writefile)(const char*, const char*);
     void *(*loadlib)(const char*);
-    void *(*getproc)(void*, const char*);
     int (*socket)(void);
     int (*bind)(int, int);
     int (*listen)(int, int);
     int (*accept)(int);
     int (*send)(int, const char*, int);
     int (*recv)(int, char*, int);
-    char **(*listdir)(const char*, int*);
-    int (*mkdir)(const char*);
-    int (*remove)(const char*);
-    int (*rename)(const char*, const char*);
-    char *(*getenv)(const char*);
-    int (*setenv)(const char*, const char*);
-    void (*exit)(int);
+    void *(*createwindow)(int, int, const char*);
+    void (*destroywindow)(void*);
+    void (*mainloop)(void);
+    void (*postquit)(void);
 } platformapi;
 
 extern environment *globalenv;
@@ -238,9 +211,6 @@ extern platformapi platform;
 
 void gcinit(void);
 void gcaddroot(object *obj);
-void gcremove(object *obj);
-void gcretain(object *obj);
-void gcrelease(object *obj);
 void gcrun(void);
 object *gcalloc(int size);
 
@@ -258,24 +228,15 @@ object *makeclass(char *name, environment *attrs, object *bases);
 object *makeinstance(object *klass, object **args, int argc);
 object *makemodule(char *name, void *handle);
 object *makenative(void *handle, void *data);
-object *maketensor(float *data, int rows, int cols);
 object *makegenerator(object *func, environment *env);
 object *makecoroutine(object *func, environment *env);
-object *makevector(int size);
-object *makevectorfromlist(object *list);
+object *makeguiwin(void *display, void *window, int w, int h);
+object *makeglwin(void *display, void *window, void *glc);
 
 void listappend(object *list, object *item);
 object *listpop(object *list, int index);
-void listinsert(object *list, int index, object *item);
-object *listremove(object *list, object *item);
-object *listindex(object *list, object *item);
-void listsort(object *list);
-void listreverse(object *list);
-object *listslice(object *list, int start, int stop, int step);
-
 void dictset(object *dict, object *key, object *val);
 object *dictget(object *dict, object *key);
-void dictdel(object *dict, object *key);
 int dicthas(object *dict, object *key);
 object *dictkeys(object *dict);
 object *dictvalues(object *dict);
@@ -291,7 +252,6 @@ int lessthan(object *a, object *b);
 int greaterthan(object *a, object *b);
 
 void throwexception(char *msg);
-void throwexceptiontype(char *type, char *msg);
 object *catchexception(void);
 void initexceptions(environment *env);
 
@@ -304,35 +264,11 @@ void registerstdlib(environment *env);
 void registeralllibs(environment *env);
 
 void replstart(void);
-void breakpoint(int line);
-void inspectvar(char *var);
-void profilestart(void);
-void profilestop(void);
-char *formatcode(char *source);
-char **lintcode(char *source, int *count);
-char *generatedocs(char *source);
-char *typedocs(char *source);
-
 void platforminit(void);
 void platformlog(const char *msg);
 void platformsleep(double seconds);
 double platformtime(void);
 char *platformreadfile(const char *path);
 int platformwritefile(const char *path, const char *content);
-void *platformloadlib(const char *path);
-void *platformgetproc(void *lib, const char *name);
-int platformsocket(void);
-int platformbind(int fd, int port);
-int platformlisten(int fd, int backlog);
-int platformaccept(int fd);
-int platformsend(int fd, const char *data, int len);
-int platformrecv(int fd, char *buf, int len);
-char **platformlistdir(const char *path, int *count);
-int platformmkdir(const char *path);
-int platformremove(const char *path);
-int platformrename(const char *old, const char *new);
-char *platformgetenv(const char *name);
-int platformsetenv(const char *name, const char *value);
-void platformexit(int code);
 
 #endif
