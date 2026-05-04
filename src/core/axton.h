@@ -11,9 +11,6 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <regex.h>
-#include <zlib.h>
-#include <pthread.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -32,9 +29,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <sys/epoll.h>
-#include <sys/time.h>
-#include <signal.h>
 #define PATHSEP '/'
 #endif
 
@@ -45,32 +39,21 @@
 #define LOGI(...) printf(__VA_ARGS__)
 #endif
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#endif
-
-#ifdef __APPLE__
-#include <TargetConditionals.h>
-#if TARGET_OS_IPHONE
-#define PLATFORMIOS 1
-#else
-#define PLATFORMMACOS 1
-#endif
-#endif
-
 typedef enum {
-    TOKEOF, TOKIDENT, TOKNUMBER, TOKSTRING,
+    TOKEOF, TOKIDENT, TOKNUMBER, TOKSTRING, TOKFSTRING,
     TOKINDENT, TOKDEDENT, TOKNEWLINE,
     TOKLET, TOKCONST, TOKFN, TOKIF, TOKELSE, TOKELIF,
     TOKFOR, TOKIN, TOKWHILE, TOKBREAK, TOKNEXT, TOKRETURN,
     TOKNONE, TOKTRUE, TOKFALSE, TOKAND, TOKOR, TOKNOT,
-    TOKPLUS, TOKMINUS, TOKSTAR, TOKSLASH, TOKPERCENT,
+    TOKPLUS, TOKMINUS, TOKSTAR, TOKSLASH, TOKPERCENT, TOKPOWER,
     TOKEQ, TOKEQEQ, TOKNE, TOKLT, TOKGT, TOKLE, TOKGE,
+    TOKPLUSEQ, TOKMINUSEQ, TOKSTAREQ, TOKSLASHEQ,
     TOKLPAREN, TOKRPAREN, TOKLBRACKET, TOKRBRACKET,
-    TOKLBRACE, TOKRBRACE, TOKCOMMA, TOKDOT, TOKCOLON,
+    TOKLBRACE, TOKRBRACE, TOKCOMMA, TOKDOT, TOKCOLON, TOKCOLONEQ,
+    TOKCOLONCOLON, TOKARROW, TOKUNDERSCORE,
     TOKTRY, TOKCATCH, TOKFINALLY, TOKTHROW, TOKCLASS, TOKIMPORT,
     TOKASYNC, TOKAWAIT, TOKYIELD, TOKWITH, TOKAS, TOKGLOBAL,
-    TOKNONLOCAL, TOKASSERT, TOKDECORATOR
+    TOKNONLOCAL, TOKASSERT, TOKDECORATOR, TOKMATCH, TOKCASE
 } toktype;
 
 typedef struct token {
@@ -127,6 +110,7 @@ typedef struct object {
             char *name;
             int isasync;
             int isgenerator;
+            struct object *decorators;
         } func;
         struct {
             void *(*fn)(struct object**, int, void*);
@@ -180,39 +164,26 @@ typedef struct object {
             void *frame;
         } coroutine;
         struct {
-            struct object *tasks;
-            int fd;
-            int running;
-        } eventloop;
+            struct object *enter;
+            struct object *exit;
+        } context;
         struct {
-            FILE *file;
-            int fd;
-            int mode;
-        } fileobj;
+            struct object *getter;
+            struct object *setter;
+            struct object *deleter;
+        } property;
         struct {
-            regex_t regex;
-            char *pattern;
-        } regexobj;
+            char *name;
+            struct object *fields;
+        } dataclass;
         struct {
-            regex_t regex;
-            char *pattern;
-        } reobj;
-        struct {
-            pthread_t thread;
-            struct object *func;
-            struct object *args;
-            void *result;
-            int running;
-        } threadobj;
-        struct {
-            pthread_mutex_t mutex;
-            pthread_cond_t cond;
+            char *name;
             int value;
-        } syncobj;
+        } enumval;
         struct {
-            double timeout;
-            struct object *callback;
-        } timerobj;
+            float *data;
+            int size;
+        } vector;
     };
 } object;
 
@@ -258,7 +229,6 @@ typedef struct {
     char *(*getenv)(const char*);
     int (*setenv)(const char*, const char*);
     void (*exit)(int);
-    int (*kill)(int, int);
 } platformapi;
 
 extern environment *globalenv;
@@ -289,15 +259,10 @@ object *makeinstance(object *klass, object **args, int argc);
 object *makemodule(char *name, void *handle);
 object *makenative(void *handle, void *data);
 object *maketensor(float *data, int rows, int cols);
-object *maketensorn(float *data, int *shape, int ndim);
 object *makegenerator(object *func, environment *env);
 object *makecoroutine(object *func, environment *env);
-object *makeeventloop(void);
-object *makefile(FILE *f, int fd, int mode);
-object *makeregex(char *pattern);
-object *makethread(object *func, object *args);
-object *makesync(void);
-object *maketimer(double timeout, object *callback);
+object *makevector(int size);
+object *makevectorfromlist(object *list);
 
 void listappend(object *list, object *item);
 object *listpop(object *list, int index);
@@ -316,42 +281,14 @@ object *dictkeys(object *dict);
 object *dictvalues(object *dict);
 object *dictitems(object *dict);
 
-object *stringslice(object *str, int start, int stop, int step);
-object *stringsplit(object *str, object *sep, int maxsplit);
-object *stringjoin(object *str, object *list);
-object *stringreplace(object *str, object *old, object *new, int count);
-object *stringlower(object *str);
-object *stringupper(object *str);
-object *stringstrip(object *str, char *chars);
-object *stringstartswith(object *str, object *prefix);
-object *stringendswith(object *str, object *suffix);
-object *stringfind(object *str, object *sub, int start);
-
 int istruthy(object *v);
 int valuesequal(object *a, object *b);
 object *addvalues(object *a, object *b);
 object *subvalues(object *a, object *b);
 object *mulvalues(object *a, object *b);
 object *divvalues(object *a, object *b);
-object *modvalues(object *a, object *b);
-object *powvalues(object *a, object *b);
-object *floordivvalues(object *a, object *b);
-object *andvalues(object *a, object *b);
-object *orvalues(object *a, object *b);
-object *xorvalues(object *a, object *b);
-object *lshiftvalues(object *a, object *b);
-object *rshiftvalues(object *a, object *b);
 int lessthan(object *a, object *b);
 int greaterthan(object *a, object *b);
-int lessequal(object *a, object *b);
-int greaterequal(object *a, object *b);
-object *negate(object *a);
-object *invert(object *a);
-object *getattr(object *obj, char *name);
-void setattr(object *obj, char *name, object *val);
-int hasattr(object *obj, char *name);
-object *callmethod(object *obj, char *name, object **args, int argc);
-object *supercall(object *obj, char *name, object **args, int argc);
 
 void throwexception(char *msg);
 void throwexceptiontype(char *type, char *msg);
@@ -362,7 +299,6 @@ token *tokenize(char *input);
 stmt *parsetokens(token *tokens, int count);
 object *evalprogram(stmt *program, environment *env);
 object *callfunc(object *fn, object **args, int argc, environment *env);
-object *callmethod(object *obj, char *name, object **args, int argc);
 void registerbuiltins(environment *env);
 void registerstdlib(environment *env);
 void registeralllibs(environment *env);
@@ -398,6 +334,5 @@ int platformrename(const char *old, const char *new);
 char *platformgetenv(const char *name);
 int platformsetenv(const char *name, const char *value);
 void platformexit(int code);
-int platformkill(int pid, int sig);
 
 #endif
