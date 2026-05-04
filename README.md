@@ -9,6 +9,20 @@ all os :
 - freebsd
 - web
 - ios
+> currently unavailable on Android (not built, Windows, Mac, Linux, desktop users in general can build it but not Android)
+
+Linux & Mac :
+git clone https://github.com/axom0022/axton.git
+cd axton
+gcc -o axton src/core/*.c src/platform/linux.c -lm
+./axton myfile.ax
+
+Windows :
+git clone https://github.com/axom0022/axton.git
+cd axton
+gcc -o axton.exe src/core/*.c src/platform/windows.c -lm
+axton.exe myfile.ax
+
 
 ![typing](https://readme-typing-svg.herokuapp.com/?lines=fast+language)
 
