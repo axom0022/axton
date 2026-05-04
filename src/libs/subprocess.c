@@ -1,18 +1,16 @@
 #include "../core/axton.h"
 #include <sys/wait.h>
 
-object *subprocess_run(object **args, int argc, void *env) {
-    if (argc < 1 || args[0]->type != 2) throwexception("run needs command");
-    char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "%s", args[0]->sval);
-    int ret = system(cmd);
+object *subprocessrun(object **a, int c, void *e) {
+    if (c < 1 || a[0]->type != 2) throwexception("run needs command");
+    int ret = system(a[0]->sval);
     return makeint(WEXITSTATUS(ret));
 }
 
-object *subprocess_output(object **args, int argc, void *env) {
-    if (argc < 1 || args[0]->type != 2) throwexception("output needs command");
+object *subprocessoutput(object **a, int c, void *e) {
+    if (c < 1 || a[0]->type != 2) throwexception("output needs command");
     char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "%s 2>/dev/null", args[0]->sval);
+    snprintf(cmd, sizeof(cmd), "%s 2>/dev/null", a[0]->sval);
     FILE *fp = popen(cmd, "r");
     if (!fp) return makestring("");
     char buf[4096];
@@ -31,14 +29,14 @@ object *subprocess_output(object **args, int argc, void *env) {
     return res;
 }
 
-object *subprocess_call(object **args, int argc, void *env) {
-    return subprocess_run(args, argc, env);
+object *subprocesscall(object **a, int c, void *e) {
+    return subprocessrun(a, c, e);
 }
 
 void registersubprocesslib(environment *env) {
     object *mod = makemodule("subprocess", NULL);
-    envset(mod->module.exports, "run", makebuiltin(subprocess_run), 0);
-    envset(mod->module.exports, "output", makebuiltin(subprocess_output), 0);
-    envset(mod->module.exports, "call", makebuiltin(subprocess_call), 0);
+    envset(mod->module.exports, "run", makebuiltin(subprocessrun), 0);
+    envset(mod->module.exports, "output", makebuiltin(subprocessoutput), 0);
+    envset(mod->module.exports, "call", makebuiltin(subprocesscall), 0);
     envset(env, "subprocess", mod, 0);
 }
