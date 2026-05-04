@@ -1,0 +1,45 @@
+let assert = fn(cond, msg) { if not cond { print("FAIL: " + msg); exit(1) } }
+
+let math = require("math")
+assert(math.abs(-5) == 5, "math.abs")
+assert(math.sqrt(16) == 4, "math.sqrt")
+
+let vec = require("vector")
+let v = vec.fromlist([1,2,3])
+assert(vec.len(v) == 3, "vec.len")
+assert(vec.sum(v) == 6, "vec.sum")
+
+let datetime = require("datetime")
+let now = datetime.now()
+assert(now.year > 2020, "datetime.year")
+
+let hashlib = require("hashlib")
+let h = hashlib.md5("test")
+assert(len(h) == 32, "hashlib.md5")
+
+let re = require("re")
+assert(re.match("^a.*", "abc"), "re.match")
+
+let json = require("json")
+let j = json.dumps({"a":1})
+assert(j == "{\"a\":1}", "json.dumps")
+
+let csv = require("csv")
+let rows = csv.reader("a,b\n1,2")
+assert(rows[0][0] == "a", "csv.reader")
+
+let subprocess = require("subprocess")
+let out = subprocess.output("echo hello")
+assert(out == "hello\n", "subprocess")
+
+let socket = require("socket")
+let s = socket.socket()
+socket.close(s) 
+
+let os = require("os")
+assert(os.name() != "", "os.name")
+
+let sys = require("sys")
+assert(sys.platform() != "", "sys.platform")
+
+print("All integration tests passed.")
