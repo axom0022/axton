@@ -1,6 +1,6 @@
 # AXTON 
 *coding language everywhere*
-
+`files that are coded in axton will have .ax`
 all os :
 - Mac
 - Linux
