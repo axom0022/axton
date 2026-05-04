@@ -1,0 +1,19 @@
+let gfx = require("graphics")
+let e3d = require("engine3d")
+
+e3d.init()
+
+let win = gfx.createwindow("3D Cube", 800, 600)
+
+let angle = 0
+
+gfx.onidle(fn() {
+    e3d.cube({"pos": [0,0,0], "rot": [angle, angle, 0], "scale": [1,1,1]})
+    angle = angle + 2
+})
+
+gfx.onkey(fn(key) {
+    print("key: " + key)
+})
+
+gfx.run()
