@@ -16,6 +16,10 @@ void registercollectionslib(environment *env);
 void registeritertools(environment *env);
 void registerhttplib(environment *env);
 void registergui2lib(environment *env);
+void registerwebsocketlib(environment *env);
+void registerhttpslib(environment *env);
+void registerormlib(environment *env);
+void registernumpylib(environment *env);
 
 void registeralllibs(environment *env) {
     registermathlib(env);
@@ -34,4 +38,8 @@ void registeralllibs(environment *env) {
     registeritertools(env);
     registerhttplib(env);
     registergui2lib(env);
+    registerwebsocketlib(env);
+    registerhttpslib(env);
+    registerormlib(env);
+    registernumpylib(env);
 }
