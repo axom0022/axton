@@ -61,4 +61,4 @@ void registersyslib(environment *env) {
     envset(sysmod->module.exports, "stderr", makebuiltin(builtinsysstderr), 0);
     envset(sysmod->module.exports, "path", makebuiltin(builtinsyspath), 0);
     envset(env, "sys", sysmod, 0);
-}
+}.
