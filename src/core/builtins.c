@@ -681,4 +681,4 @@ void registerstdlib(environment *env) {
     envset(env, "repr", makebuiltin(builtinrepr), 0);
     envset(env, "ascii", makebuiltin(builtinascii), 0);
     registeralllibs(env);
-}
+}. 
