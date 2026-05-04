@@ -10,7 +10,7 @@ object *builtinrematch(object **args, int argc, environment *env) {
     }
     int result = regexec(&regex, args[1]->sval, 0, NULL, 0);
     regfree(&regex);
-    return makebool(result == 0);.
+    return makebool(result == 0);
 }
 
 object *builtinresearch(object **args, int argc, environment *env) {
