@@ -14,6 +14,8 @@ void registerrelib(environment *env);
 void registerthreadlib(environment *env);
 void registercollectionslib(environment *env);
 void registeritertools(environment *env);
+void registerhttplib(environment *env);
+void registergui2lib(environment *env);
 
 void registeralllibs(environment *env) {
     registermathlib(env);
@@ -30,4 +32,6 @@ void registeralllibs(environment *env) {
     registerthreadlib(env);
     registercollectionslib(env);
     registeritertools(env);
+    registerhttplib(env);
+    registergui2lib(env);
 }
