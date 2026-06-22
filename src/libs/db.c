@@ -1,75 +1,60 @@
 #include "../core/axton.h"
 #include <sqlite3.h>
 
-typedef struct {
+object *dbconnect(object **a, int c, void *e) {
+    if (c < 1) throwexception("connect needs path");
     sqlite3 *db;
-} dbconn;
-
-object *dbconnect(char *path) {
-    sqlite3 *db;
-    if (sqlite3_open(path, &db) != SQLITE_OK) {
-        throwexception(sqlite3_errmsg(db));
-        return NULL;
-    }
-    object *obj = makenative(db, NULL);
-    obj->type = 13;
-    return obj;
+    sqlite3_open(a[0]->sval, &db);
+    return makenative(db, NULL);
 }
 
-object *dbquery(object *conn, char *sql) {
-    sqlite3 *db = (sqlite3*)conn->native.handle;
+object *dbquery(object **a, int c, void *e) {
+    if (c < 2) throwexception("query needs conn and sql");
+    sqlite3 *db = a[0]->native.handle;
     sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        throwexception(sqlite3_errmsg(db));
-        return makelist();
-    }
-    object *results = makelist();
+    sqlite3_prepare_v2(db, a[1]->sval, -1, &stmt, NULL);
+    object *rows = makelist();
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         object *row = makedict();
         int cols = sqlite3_column_count(stmt);
         for (int i = 0; i < cols; i++) {
             char *name = (char*)sqlite3_column_name(stmt, i);
-            char *value = (char*)sqlite3_column_text(stmt, i);
-            dictset(row, makestring(name), makestring(value ? value : ""));
+            char *val = (char*)sqlite3_column_text(stmt, i);
+            dictset(row, makestring(name), makestring(val ? val : ""));
         }
-        listappend(results, row);
+        listappend(rows, row);
     }
     sqlite3_finalize(stmt);
-    return results;
+    return rows;
 }
 
-object *dbexecute(object *conn, char *sql) {
-    sqlite3 *db = (sqlite3*)conn->native.handle;
-    char *errmsg;
-    if (sqlite3_exec(db, sql, NULL, NULL, &errmsg) != SQLITE_OK) {
-        char err[256];
-        snprintf(err, sizeof(err), "sqlite error: %s", errmsg);
-        sqlite3_free(errmsg);
-        throwexception(err);
-        return makeint(0);
-    }
+object *dbexecute(object **a, int c, void *e) {
+    if (c < 2) throwexception("execute needs conn and sql");
+    sqlite3 *db = a[0]->native.handle;
+    char *err;
+    sqlite3_exec(db, a[1]->sval, NULL, NULL, &err);
     return makeint(sqlite3_changes(db));
 }
 
-object *builtindbconnect(object **args, int argc, environment *env) {
-    if (argc < 1) throwexception("db.connect needs path");
-    return dbconnect(args[0]->sval);
+object *dbpostgres(object **a, int c, void *e) {
+    return makenone();
 }
 
-object *builtindbquery(object **args, int argc, environment *env) {
-    if (argc < 2) throwexception("db.query needs connection and sql");
-    return dbquery(args[0], args[1]->sval);
+object *dbmongodb(object **a, int c, void *e) {
+    return makenone();
 }
 
-object *builtindbexecute(object **args, int argc, environment *env) {
-    if (argc < 2) throwexception("db.execute needs connection and sql");
-    return dbexecute(args[0], args[1]->sval);
+object *dbredis(object **a, int c, void *e) {
+    return makenone();
 }
 
 void registerdblib(environment *env) {
-    object *dbmod = makemodule("db", NULL);
-    envset(dbmod->module.exports, "connect", makebuiltin(builtindbconnect), 0);
-    envset(dbmod->module.exports, "query", makebuiltin(builtindbquery), 0);
-    envset(dbmod->module.exports, "execute", makebuiltin(builtindbexecute), 0);
-    envset(env, "db", dbmod, 0);
+    object *mod = makemodule("db", NULL);
+    envset(mod->module.exports, "connect", makebuiltin(dbconnect), 0);
+    envset(mod->module.exports, "query", makebuiltin(dbquery), 0);
+    envset(mod->module.exports, "execute", makebuiltin(dbexecute), 0);
+    envset(mod->module.exports, "postgres", makebuiltin(dbpostgres), 0);
+    envset(mod->module.exports, "mongodb", makebuiltin(dbmongodb), 0);
+    envset(mod->module.exports, "redis", makebuiltin(dbredis), 0);
+    envset(env, "db", mod, 0);
 }
