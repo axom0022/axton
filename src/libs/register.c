@@ -62,6 +62,7 @@ void registerunicodelib(environment *env);
 void register3dlib(environment *env);
 void registermemorylib(environment *env);
 void registerweblib(environment *env);
+void registerpackagelib(environment *env);
 
 void registeralllibs(environment *env) {
     registerstdlib(env);
@@ -126,4 +127,5 @@ void registeralllibs(environment *env) {
     register3dlib(env);
     registermemorylib(env);
     registerweblib(env);
+    registerpackagelib(env);
 }
