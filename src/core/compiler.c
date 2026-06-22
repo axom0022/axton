@@ -1,16 +1,16 @@
-#include "axton.h"
-#include "bytecode.h"
+#include "compiler.h"
+#include <string.h>
 
-static bytecode *currentbc = NULL;
+static bytecode *curbc = NULL;
 
 static void compileexpr(expr *e);
 static void compilestmt(stmt *s);
 
 void compileprogram(stmt *prog, bytecode *bc) {
-    currentbc = bc;
+    curbc = bc;
     stmtlist *list = (stmtlist*)prog;
     for (int i = 0; i < list->count; i++) compilestmt(list->items[i]);
-    bytecodeemit(currentbc, OPRETURN, 0);
+    bytecodeemit(curbc, opreturn, 0);
 }
 
 static void compileexpr(expr *e) {
@@ -19,61 +19,60 @@ static void compileexpr(expr *e) {
         compileexpr(b->left);
         compileexpr(b->right);
         switch (b->op) {
-            case TOKPLUS: bytecodeemit(currentbc, OPADD, e->line); break;
-            case TOKMINUS: bytecodeemit(currentbc, OPSUB, e->line); break;
-            case TOKSTAR: bytecodeemit(currentbc, OPMUL, e->line); break;
-            case TOKSLASH: bytecodeemit(currentbc, OPDIV, e->line); break;
-            default: throwexception("unsupported op in compiler");
+            case TOKPLUS: bytecodeemit(curbc, opadd, e->line); break;
+            case TOKMINUS: bytecodeemit(curbc, opsub, e->line); break;
+            case TOKSTAR: bytecodeemit(curbc, opmul, e->line); break;
+            case TOKSLASH: bytecodeemit(curbc, opdiv, e->line); break;
+            default: throwexception("unsupported op");
         }
         return;
     }
     if (((identexpr*)e)->name) {
         identexpr *i = (identexpr*)e;
-        int idx = bytecodeemitname(currentbc, i->name, e->line);
-        bytecodeemit(currentbc, OPLOADVAR, e->line);
-        bytecodeemitint(currentbc, idx, e->line);
+        int idx = bytecodeemitname(curbc, i->name, e->line);
+        bytecodeemit(curbc, oploadvar, e->line);
+        bytecodeemitint(curbc, idx, e->line);
         return;
     }
     if (((numberexpr*)e)->value) {
         numberexpr *n = (numberexpr*)e;
         double val = n->value;
         if (val == (double)(long)val) {
-            bytecodeemitconst(currentbc, makeint((long)val), e->line);
+            bytecodeemitconst(curbc, makeint((long)val), e->line);
         } else {
-            bytecodeemitconst(currentbc, makefloat(val), e->line);
+            bytecodeemitconst(curbc, makefloat(val), e->line);
         }
         return;
     }
     if (((stringexpr*)e)->value) {
         stringexpr *s = (stringexpr*)e;
-        bytecodeemitconst(currentbc, makestring(s->value), e->line);
+        bytecodeemitconst(curbc, makestring(s->value), e->line);
         return;
     }
-    
-    bytecodeemitconst(currentbc, makenone(), e->line);
+    bytecodeemitconst(curbc, makenone(), e->line);
 }
 
 static void compilestmt(stmt *s) {
     if (((letexpr*)s)->name) {
         letexpr *l = (letexpr*)s;
         compileexpr(l->value);
-        int idx = bytecodeemitname(currentbc, l->name, s->line);
-        bytecodeemit(currentbc, OPSTOREVAR, s->line);
-        bytecodeemitint(currentbc, idx, s->line);
+        int idx = bytecodeemitname(curbc, l->name, s->line);
+        bytecodeemit(curbc, opstorevar, s->line);
+        bytecodeemitint(curbc, idx, s->line);
         return;
     }
     if (((returnexpr*)s)->value != NULL || ((returnexpr*)s)->value == NULL) {
         returnexpr *r = (returnexpr*)s;
         if (r->value) compileexpr(r->value);
-        else bytecodeemitconst(currentbc, makenone(), s->line);
-        bytecodeemit(currentbc, OPRETURN, s->line);
+        else bytecodeemitconst(curbc, makenone(), s->line);
+        bytecodeemit(curbc, opreturn, s->line);
         return;
     }
-    
     if (((exprstmt*)s)->expression) {
         exprstmt *e = (exprstmt*)s;
         compileexpr(e->expression);
-        bytecodeemit(currentbc, OPPOP, s->line);
+        bytecodeemit(curbc, oppop, s->line);
         return;
     }
+    bytecodeemit(curbc, oppop, s->line);
 }
