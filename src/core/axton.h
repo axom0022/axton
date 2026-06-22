@@ -28,20 +28,35 @@
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <signal.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <netpacket/packet.h>
+#include <net/ethernet.h>
+#include <netinet/ip.h>
+#include <netinet/udp.h>
+#include <netinet/tcp.h>
+#include <netdb.h>
 #define PATHSEP '/'
 #endif
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#include <emscripten/html5.h>
-#include <GLES3/gl3.h>
-#else
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <GL/glx.h>
+#ifdef __linux__
+#include <pcap.h>
+#include <bluetooth/bluetooth.h>
+#include <bluetooth/hci.h>
+#include <bluetooth/hci_lib.h>
 #endif
 
-#include <ffi.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/md5.h>
+#include <openssl/sha.h>
+#include <openssl/aes.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+
+#include <jpeglib.h>
+#include <png.h>
+#include <tesseract/capi.h>
 
 typedef enum {
     TOKEOF, TOKIDENT, TOKNUMBER, TOKSTRING, TOKINDENT, TOKDEDENT, TOKNEWLINE,
@@ -258,6 +273,49 @@ typedef struct object {
             int size;
             int used;
         } memblock;
+        struct {
+            int (*check)(void*);
+        } typeguard;
+        struct {
+            object *rules;
+        } ratelimiter;
+        struct {
+            object *patterns;
+        } validator;
+        struct {
+            unsigned char *data;
+            int size;
+        } hashcrack;
+        struct {
+            object *targets;
+            int state;
+        } passwordbrute;
+        struct {
+            int fd;
+            object *clients;
+        } mitmproxy;
+        struct {
+            int fd;
+            char *interface;
+        } arpspoof;
+        struct {
+            int fd;
+            char *host;
+            int port;
+            object *credentials;
+        } sshbrute;
+        struct {
+            object *session;
+        } scraper;
+        struct {
+            object *sources;
+        } osint;
+        struct {
+            void *engine;
+        } vision;
+        struct {
+            void *tess;
+        } ocr;
     };
 } object;
 
@@ -310,6 +368,13 @@ typedef struct {
     void (*deallocate)(void*);
     void *(*reallocate)(void*, int);
     int (*getpagesize)(void);
+    int (*pcapopen)(const char*, char*);
+    int (*pcapnext)(int, unsigned char**, int*);
+    int (*pcapinject)(int, unsigned char*, int);
+    void (*pcapclose)(int);
+    int (*bluetoothopen)(void);
+    int (*bluetoothscan)(int, object*);
+    void (*bluetoothclose)(int);
 } platformapi;
 
 extern environment *globalenv;
@@ -350,6 +415,18 @@ object *maketransform(float x, float y, float z, float rx, float ry, float rz, f
 object *makerenderable(object *mesh, object *mat, object *trans);
 object *makerendertarget(int w, int h);
 object *makememoryblock(int size);
+object *maketypeguard(int (*check)(void*));
+object *makeratelimiter(object *rules);
+object *makevalidator(object *patterns);
+object *makehashcrack(unsigned char *data, int size);
+object *makepasswordbrute(object *targets);
+object *makemitmproxy(int fd);
+object *makearpspoof(int fd, char *iface);
+object *makesshbrute(int fd, char *host, int port, object *creds);
+object *makescraper(object *session);
+object *makeosint(object *sources);
+object *makevision(void *engine);
+object *makeocr(void *tess);
 
 void listappend(object *list, object *item);
 object *listpop(object *list, int index);
@@ -410,6 +487,13 @@ void *platformallocate(int size);
 void platformdeallocate(void *ptr);
 void *platformreallocate(void *ptr, int size);
 int platformgetpagesize(void);
+int platformpcapopen(const char *iface, char *err);
+int platformpcapnext(int handle, unsigned char **data, int *len);
+int platformpcapinject(int handle, unsigned char *packet, int len);
+void platformpcapclose(int handle);
+int platformbluetoothopen(void);
+int platformbluetoothscan(int handle, object *devices);
+void platformbluetoothclose(int handle);
 
 void registerhttplib(environment *env);
 void registerwebsocketlib(environment *env);
@@ -448,5 +532,11 @@ void registerunicodelib(environment *env);
 void register3dlib(environment *env);
 void registermemorylib(environment *env);
 void registerweblib(environment *env);
+void registerpackagelib(environment *env);
+void registersecuritylib(environment *env);
+void registerscriptlib(environment *env);
+void registerosintlib(environment *env);
+void registervisionlib(environment *env);
+void registerocrlib(environment *env);
 
 #endif
