@@ -5,10 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdarg.h>
 #include <setjmp.h>
 #include <math.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -25,16 +27,24 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <GL/gl.h>
-#include <GL/glx.h>
+#include <signal.h>
 #define PATHSEP '/'
 #endif
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#include <GLES3/gl3.h>
+#else
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <GL/glx.h>
+#endif
+
+#include <ffi.h>
+
 typedef enum {
-    TOKEOF, TOKIDENT, TOKNUMBER, TOKSTRING, TOKFSTRING,
-    TOKINDENT, TOKDEDENT, TOKNEWLINE,
+    TOKEOF, TOKIDENT, TOKNUMBER, TOKSTRING, TOKINDENT, TOKDEDENT, TOKNEWLINE,
     TOKLET, TOKCONST, TOKFN, TOKIF, TOKELSE, TOKELIF,
     TOKFOR, TOKIN, TOKWHILE, TOKBREAK, TOKNEXT, TOKRETURN,
     TOKNONE, TOKTRUE, TOKFALSE, TOKAND, TOKOR, TOKNOT,
@@ -45,7 +55,9 @@ typedef enum {
     TOKCOLONEQ, TOKCOLONCOLON, TOKARROW, TOKUNDERSCORE,
     TOKTRY, TOKCATCH, TOKFINALLY, TOKTHROW, TOKCLASS, TOKIMPORT,
     TOKASYNC, TOKAWAIT, TOKYIELD, TOKWITH, TOKAS, TOKGLOBAL,
-    TOKNONLOCAL, TOKASSERT, TOKDECORATOR, TOKMATCH, TOKCASE
+    TOKNONLOCAL, TOKASSERT, TOKDECORATOR, TOKMATCH, TOKCASE,
+    TOKPIPE, TOKTYPEHINT, TOKENUM, TOKDATACLASS,
+    TOKUNION, TOKOPTIONAL, TOKASYNCIO
 } toktype;
 
 typedef struct token {
@@ -74,6 +86,7 @@ typedef struct object {
     struct object *next;
     struct object *prev;
     int marked;
+    int refcount;
     int type;
     union {
         long ival;
@@ -101,6 +114,7 @@ typedef struct object {
             char *name;
             int isasync;
             int isgenerator;
+            struct object *decorators;
         } func;
         struct {
             void *(*fn)(struct object**, int, void*);
@@ -137,6 +151,8 @@ typedef struct object {
             float *data;
             int rows;
             int cols;
+            int *shape;
+            int ndim;
         } tensor;
         struct {
             struct object *func;
@@ -153,7 +169,7 @@ typedef struct object {
             void *display;
             void *window;
             void *gc;
-            int w, h;
+            int w,h;
         } guiwin;
         struct {
             void *display;
@@ -162,8 +178,86 @@ typedef struct object {
         } glwin;
         struct {
             void *data;
-            int w, h;
+            int w,h;
         } canvas;
+        struct {
+            char *name;
+            struct object *fields;
+            int issimple;
+        } dataclass;
+        struct {
+            char *name;
+            int value;
+        } enumval;
+        struct {
+            struct object *left;
+            struct object *right;
+        } uniontype;
+        struct {
+            struct object *type;
+        } optionaltype;
+        struct {
+            void *ctx;
+            int fd;
+        } sslctx;
+        struct {
+            void *handle;
+            int type;
+        } cloud;
+        struct {
+            ffi_cif cif;
+            ffi_type **argtypes;
+            void *function;
+            int argcount;
+            int rettype;
+            int *argtypes_code;
+        } ffiwrap;
+        struct {
+            void *handle;
+        } libhandle;
+        struct {
+            void *ptr;
+        } pointer;
+        struct {
+            void *data;
+            int size;
+        } structobj;
+        struct {
+            object *fn;
+        } callback;
+        struct {
+            unsigned int program;
+            unsigned int vao;
+            unsigned int vbo;
+            unsigned int ebo;
+            int vertexcount;
+            int indexcount;
+        } mesh;
+        struct {
+            unsigned int program;
+            struct object *textures;
+        } material;
+        struct {
+            float pos[3];
+            float rot[3];
+            float scale[3];
+        } transform;
+        struct {
+            object *mesh;
+            object *material;
+            object *transform;
+        } renderable;
+        struct {
+            unsigned int framebuffer;
+            unsigned int depthbuffer;
+            unsigned int texture;
+            int w,h;
+        } rendertarget;
+        struct {
+            void *memory;
+            int size;
+            int used;
+        } memblock;
     };
 } object;
 
@@ -171,6 +265,7 @@ typedef struct environment {
     char **names;
     object **values;
     int *isconst;
+    char **typehints;
     int count;
     int cap;
     struct environment *parent;
@@ -186,7 +281,7 @@ typedef struct {
 } frame;
 
 typedef struct {
-    int (*log)(const char*);
+    void (*log)(const char*);
     double (*time)(void);
     void (*sleep)(double);
     char *(*readfile)(const char*);
@@ -202,6 +297,19 @@ typedef struct {
     void (*destroywindow)(void*);
     void (*mainloop)(void);
     void (*postquit)(void);
+    char *(*getenv)(const char*);
+    int (*setenv)(const char*, const char*);
+    int (*kill)(int, int);
+    int (*getpid)(void);
+    void *(*opendir)(const char*);
+    char *(*readdir)(void*);
+    void (*closedir)(void*);
+    int (*chmod)(const char*, int);
+    int (*chown)(const char*, int, int);
+    void *(*allocate)(int);
+    void (*deallocate)(void*);
+    void *(*reallocate)(void*, int);
+    int (*getpagesize)(void);
 } platformapi;
 
 extern environment *globalenv;
@@ -230,11 +338,22 @@ object *makemodule(char *name, void *handle);
 object *makenative(void *handle, void *data);
 object *makegenerator(object *func, environment *env);
 object *makecoroutine(object *func, environment *env);
-object *makeguiwin(void *display, void *window, int w, int h);
-object *makeglwin(void *display, void *window, void *glc);
+object *makeguiwin(void *dpy, void *win, int w, int h);
+object *makeglwin(void *dpy, void *win, void *glc);
+object *makedataclass(char *name, object *fields);
+object *makeenum(char *name, object *values);
+object *makeunion(object *left, object *right);
+object *makeoptional(object *type);
+object *makemesh(unsigned int prog, unsigned int vao, unsigned int vbo, unsigned int ebo, int vc, int ic);
+object *makematerial(unsigned int prog, object *textures);
+object *maketransform(float x, float y, float z, float rx, float ry, float rz, float sx, float sy, float sz);
+object *makerenderable(object *mesh, object *mat, object *trans);
+object *makerendertarget(int w, int h);
+object *makememoryblock(int size);
 
 void listappend(object *list, object *item);
 object *listpop(object *list, int index);
+void listinsert(object *list, int index, object *item);
 void dictset(object *dict, object *key, object *val);
 object *dictget(object *dict, object *key);
 int dicthas(object *dict, object *key);
@@ -252,6 +371,7 @@ int lessthan(object *a, object *b);
 int greaterthan(object *a, object *b);
 
 void throwexception(char *msg);
+void throwexceptiontype(char *type, char *msg);
 object *catchexception(void);
 void initexceptions(environment *env);
 
@@ -270,5 +390,63 @@ void platformsleep(double seconds);
 double platformtime(void);
 char *platformreadfile(const char *path);
 int platformwritefile(const char *path, const char *content);
+void *platformloadlib(const char *path);
+int platformsocket(void);
+int platformbind(int fd, int port);
+int platformlisten(int fd, int backlog);
+int platformaccept(int fd);
+int platformsend(int fd, const char *data, int len);
+int platformrecv(int fd, char *buf, int len);
+char *platformgetenv(const char *name);
+int platformsetenv(const char *name, const char *value);
+int platformkill(int pid, int sig);
+int platformgetpid(void);
+void *platformopendir(const char *path);
+char *platformreaddir(void *dir);
+void platformclosedir(void *dir);
+int platformchmod(const char *path, int mode);
+int platformchown(const char *path, int uid, int gid);
+void *platformallocate(int size);
+void platformdeallocate(void *ptr);
+void *platformreallocate(void *ptr, int size);
+int platformgetpagesize(void);
+
+void registerhttplib(environment *env);
+void registerwebsocketlib(environment *env);
+void registertunnellib(environment *env);
+void registerguilib(environment *env);
+void registerwebviewlib(environment *env);
+void registerdblib(environment *env);
+void registerpathlib(environment *env);
+void registerasynclib(environment *env);
+void registermetaprogramlib(environment *env);
+void registergeneratorlib(environment *env);
+void registercontextlib(environment *env);
+void registerpipetransformlib(environment *env);
+void registerpatternlib(environment *env);
+void registerjwtlib(environment *env);
+void registerauthlib(environment *env);
+void registerencryptionlib(environment *env);
+void registerenvlib(environment *env);
+void registersecretlib(environment *env);
+void registerauditlib(environment *env);
+void registercolorlib(environment *env);
+void registerdebuglib(environment *env);
+void registerobfuscatelib(environment *env);
+void registerailib(environment *env);
+void registerextensionlib(environment *env);
+void registerwebrtclib(environment *env);
+void registerwebgpulib(environment *env);
+void registercloudlib(environment *env);
+void registercontainerlib(environment *env);
+void registerenumlib(environment *env);
+void registerdataclasslib(environment *env);
+void registerunionlib(environment *env);
+void registeroptionallib(environment *env);
+void registergraphqllib(environment *env);
+void registerunicodelib(environment *env);
+void register3dlib(environment *env);
+void registermemorylib(environment *env);
+void registerweblib(environment *env);
 
 #endif
