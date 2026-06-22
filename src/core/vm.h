@@ -1,5 +1,5 @@
-#ifndef VM_H
-#define VM_H
+#ifndef vm_h
+#define vm_h
 
 #include "axton.h"
 #include "bytecode.h"
