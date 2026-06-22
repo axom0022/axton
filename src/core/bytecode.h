@@ -1,13 +1,13 @@
-#ifndef BYTECODE_H
-#define BYTECODE_H
+#ifndef bytecode_h
+#define bytecode_h
 
 #include "axton.h"
 
 typedef enum {
-    OPLOADCONST, OPLOADVAR, OPSTOREVAR, OPADD, OPSUB, OPMUL, OPDIV,
-    OPCALL, OPRETURN, OPJUMP, OPJUMPIFFALSE, OPPOP, OPCOMPARE,
-    OPMAKELIST, OPMAKEDICT, OPGETATTR, OPSETATTR, OPINDEX, OPSETINDEX,
-    OPMAKEFUNC, OPMAKECLASS, OPMAKEINSTANCE, OPGETGLOBAL, OPSETGLOBAL
+    oploadconst, oploadvar, opstorevar, opadd, opsub, opmul, opdiv,
+    opcall, opreturn, opjump, opjumpiffalse, oppop, opcompare,
+    opmakelist, opmakedict, opgetattr, opsetattr, opindex, opsetindex,
+    opmakefunc, opmakeclass, opmakeinstance, opgetglobal, opsetglobal
 } opcode;
 
 typedef struct bytecode {
