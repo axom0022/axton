@@ -1,5 +1,4 @@
 #!/bin/bash
-
 mkdir -p bin
 
 buildlinux() {
@@ -9,7 +8,7 @@ buildlinux() {
         src/platform/linux.c \
         src/tools/*.c \
         src/libs/*.c \
-        -lm -ldl -lpthread -lsqlite3 -lz -lX11 -lssl -lcrypto
+        -lm -ldl -lpthread -lsqlite3 -lz -lX11 -lssl -lcrypto -lcurl -lpcap -lbluetooth -ltesseract -ljpeg -lpng -lffi -lglfw -lGL -lGLU
     echo "done"
 }
 
@@ -20,7 +19,7 @@ buildlinuxarm() {
         src/platform/linux.c \
         src/tools/*.c \
         src/libs/*.c \
-        -lm -ldl -lpthread -lsqlite3 -lz -static
+        -lm -ldl -lpthread -lsqlite3 -lz -static -lcurl -lpcap -lbluetooth -ltesseract -ljpeg -lpng -lffi
     echo "done"
 }
 
@@ -31,7 +30,7 @@ buildwindows() {
         src/platform/windows.c \
         src/tools/*.c \
         src/libs/*.c \
-        -lm -lws2_32 -lsqlite3 -lz
+        -lm -lws2_32 -lsqlite3 -lz -lssl -lcrypto -lcurl -lffi
     echo "done"
 }
 
@@ -42,7 +41,7 @@ buildwindows32() {
         src/platform/windows.c \
         src/tools/*.c \
         src/libs/*.c \
-        -lm -lws2_32 -lsqlite3 -lz
+        -lm -lws2_32 -lsqlite3 -lz -lssl -lcrypto -lcurl -lffi
     echo "done"
 }
 
@@ -53,7 +52,7 @@ buildmacos() {
         src/platform/macos.c \
         src/tools/*.c \
         src/libs/*.c \
-        -lm -ldl -lpthread -lsqlite3 -lz
+        -lm -ldl -lpthread -lsqlite3 -lz -lcurl -lpcap -ltesseract -ljpeg -lpng -lffi -framework OpenGL -framework Cocoa
     echo "done"
 }
 
@@ -64,7 +63,7 @@ buildmacosarm() {
         src/platform/macos.c \
         src/tools/*.c \
         src/libs/*.c \
-        -lm -ldl -lpthread -lsqlite3 -lz
+        -lm -ldl -lpthread -lsqlite3 -lz -lcurl -lpcap -ltesseract -ljpeg -lpng -lffi -framework OpenGL -framework Cocoa
     echo "done"
 }
 
@@ -80,7 +79,7 @@ buildandroid() {
         src/platform/android.c \
         src/tools/*.c \
         src/libs/*.c \
-        -lm -static
+        -lm -static -lcurl -lssl -lcrypto -lsqlite3
     echo "done"
 }
 
@@ -92,7 +91,7 @@ buildios() {
         src/platform/ios.c \
         src/tools/*.c \
         src/libs/*.c \
-        -lm
+        -lm -lcurl -lssl -lcrypto -lsqlite3
     echo "done"
 }
 
@@ -103,7 +102,7 @@ buildweb() {
         src/platform/webasm.c \
         src/tools/*.c \
         src/libs/*.c \
-        -s WASM=1 -s EXPORTED_FUNCTIONS='["_main"]'
+        -s WASM=1 -s EXPORTED_FUNCTIONS='["_main"]' -s USE_GLFW=3 -s USE_OPENGL=1
     echo "done"
 }
 
@@ -114,7 +113,7 @@ buildfreebsd() {
         src/platform/freebsd.c \
         src/tools/*.c \
         src/libs/*.c \
-        -lm
+        -lm -lpthread -lsqlite3 -lz -lcurl -lpcap -lbluetooth -ltesseract -ljpeg -lpng -lffi
     echo "done"
 }
 
