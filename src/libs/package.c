@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 
 static char *packagedir = "packages";
+static char *registryurl = "http://localhost:5000";
 static char *registryfile = "registry.json";
 
 static int mkdirp(char *path) {
@@ -10,94 +11,43 @@ static int mkdirp(char *path) {
     return system(cmd) == 0;
 }
 
-static int gitclone(char *url, char *dest) {
+static char *downloadfile(char *url, char *dest) {
     char cmd[512];
-    snprintf(cmd, sizeof(cmd), "git clone %s %s 2>/dev/null", url, dest);
-    return system(cmd) == 0;
+    snprintf(cmd, sizeof(cmd), "curl -s %s -o %s", url, dest);
+    if (system(cmd) != 0) return NULL;
+    return dest;
 }
 
-static char *extractname(char *url) {
-    char *last = strrchr(url, '/');
-    if (!last) return NULL;
-    char *name = strdup(last + 1);
-    char *dot = strstr(name, ".git");
-    if (dot) *dot = 0;
-    return name;
-}
-
-static char *getregistry(void) {
-    char *content = platformreadfile(registryfile);
-    if (!content) {
-        content = strdup("{}");
+static char *getfromregistry(char *name, char *version) {
+    char url[512];
+    if (version) {
+        snprintf(url, sizeof(url), "%s/download?name=%s&version=%s", registryurl, name, version);
+    } else {
+        snprintf(url, sizeof(url), "%s/download?name=%s", registryurl, name);
     }
-    return content;
-}
-
-static void saveregistry(char *content) {
-    platformwritefile(registryfile, content);
-}
-
-static char *getpackageurl(char *name) {
-    char *registry = getregistry();
-    char *search = strstr(registry, name);
-    if (!search) {
-        free(registry);
-        return NULL;
-    }
-    char *start = strchr(search, ':');
-    if (!start) { free(registry); return NULL; }
-    start++;
-    while (*start == ' ' || *start == '\t' || *start == '"') start++;
-    char *end = strchr(start, '"');
-    if (!end) { free(registry); return NULL; }
-    int len = end - start;
-    char *url = malloc(len + 1);
-    memcpy(url, start, len);
-    url[len] = 0;
-    free(registry);
-    return url;
+    char dest[512];
+    snprintf(dest, sizeof(dest), "%s/%s.ax", packagedir, name);
+    if (downloadfile(url, dest)) return strdup(dest);
+    return NULL;
 }
 
 object *packageinstall(object **args, int argc, void *env) {
-    if (argc < 1) throwexception("install needs package name or url");
-    char *input = args[0]->sval;
-    char *url = NULL;
-    char *name = NULL;
-    if (strstr(input, "http") == input || strstr(input, "git@") == input) {
-        url = strdup(input);
-        name = extractname(input);
-    } else {
-        url = getpackageurl(input);
-        if (!url) throwexception("package not found in registry");
-        name = strdup(input);
-    }
-    if (!name) throwexception("invalid package name");
-    char dest[512];
-    snprintf(dest, sizeof(dest), "%s/%s", packagedir, name);
-    struct stat st;
-    if (stat(dest, &st) == 0) {
-        free(url); free(name);
-        throwexception("package already installed");
-    }
+    if (argc < 1) throwexception("install needs package name");
+    char *name = args[0]->sval;
+    char *version = NULL;
+    if (argc > 1 && args[1]->type == 2) version = args[1]->sval;
     mkdirp(packagedir);
-    if (!gitclone(url, dest)) {
-        free(url); free(name);
-        throwexception("git clone failed");
-    }
-    free(url);
+    char *path = getfromregistry(name, version);
+    if (!path) throwexception("package not found");
     object *pkg = packageload(name);
-    free(name);
+    free(path);
     return pkg;
 }
 
 object *packageload(char *name) {
     char path[512];
-    snprintf(path, sizeof(path), "%s/%s/main.ax", packagedir, name);
+    snprintf(path, sizeof(path), "%s/%s.ax", packagedir, name);
     FILE *f = fopen(path, "r");
-    if (!f) {
-        snprintf(path, sizeof(path), "%s/%s/%s.ax", packagedir, name, name);
-        f = fopen(path, "r");
-    }
     if (!f) {
         char msg[256];
         snprintf(msg, sizeof(msg), "package '%s' not installed", name);
@@ -127,8 +77,11 @@ object *packagelist(object **args, int argc, void *env) {
     if (d) {
         struct dirent *entry;
         while ((entry = readdir(d)) != NULL) {
-            if (entry->d_name[0] != '.') {
-                listappend(list, makestring(entry->d_name));
+            char *name = entry->d_name;
+            int len = strlen(name);
+            if (len > 3 && strcmp(name + len - 3, ".ax") == 0) {
+                name[len - 3] = 0;
+                listappend(list, makestring(name));
             }
         }
         closedir(d);
@@ -138,16 +91,31 @@ object *packagelist(object **args, int argc, void *env) {
 
 object *packagesearch(object **args, int argc, void *env) {
     if (argc < 1) throwexception("search needs query");
-    char *query = args[0]->sval;
+    char url[512];
+    snprintf(url, sizeof(url), "%s/search?q=%s", registryurl, args[0]->sval);
+    char dest[256];
+    snprintf(dest, sizeof(dest), "/tmp/search_result.json");
+    if (!downloadfile(url, dest)) return makelist();
+    char *content = platformreadfile(dest);
+    if (!content) return makelist();
     object *results = makelist();
-    char *registry = getregistry();
-    char *p = strstr(registry, query);
-    if (p) {
-        listappend(results, makestring("mystats - statistics library"));
-        listappend(results, makestring("httpclient - http client"));
-        listappend(results, makestring("websocket - websocket library"));
+    char *p = content;
+    while ((p = strstr(p, "\"name\""))) {
+        p = strchr(p, ':');
+        if (!p) break;
+        p++;
+        while (*p == ' ' || *p == '\t' || *p == '"') p++;
+        char *end = strchr(p, '"');
+        if (!end) break;
+        int len = end - p;
+        char *name = malloc(len + 1);
+        memcpy(name, p, len);
+        name[len] = 0;
+        listappend(results, makestring(name));
+        free(name);
+        p = end;
     }
-    free(registry);
+    free(content);
     return results;
 }
 
@@ -155,21 +123,35 @@ object *packageuninstall(object **args, int argc, void *env) {
     if (argc < 1) throwexception("uninstall needs package name");
     char *name = args[0]->sval;
     char path[512];
-    snprintf(path, sizeof(path), "rm -rf %s/%s", packagedir, name);
-    system(path);
-    return makenone();
+    snprintf(path, sizeof(path), "%s/%s.ax", packagedir, name);
+    if (remove(path) == 0) {
+        return makenone();
+    }
+    throwexception("package not found");
+    return NULL;
 }
 
 object *packageupdate(object **args, int argc, void *env) {
-    if (argc < 1) throwexception("update needs package name or --all");
-    if (strcmp(args[0]->sval, "--all") == 0) {
-        system("for pkg in packages/*; do cd $pkg && git pull 2>/dev/null; cd -; done");
-        return makenone();
-    }
+    if (argc < 1) throwexception("update needs package name");
     char *name = args[0]->sval;
     char path[512];
-    snprintf(path, sizeof(path), "cd packages/%s && git pull 2>/dev/null", name);
-    system(path);
+    snprintf(path, sizeof(path), "%s/%s.ax", packagedir, name);
+    if (remove(path) != 0) throwexception("package not installed");
+    return packageinstall(args, argc, env);
+}
+
+object *packageupload(object **args, int argc, void *env) {
+    if (argc < 3) throwexception("upload needs name version author");
+    char *name = args[0]->sval;
+    char *version = args[1]->sval;
+    char *author = args[2]->sval;
+    char path[512];
+    snprintf(path, sizeof(path), "%s.ax", name);
+    if (!platformreadfile(path)) throwexception("file not found");
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "curl -s -X POST %s/upload -F \"name=%s\" -F \"version=%s\" -F \"author=%s\" -F \"file=@%s\"", registryurl, name, version, author, path);
+    int ret = system(cmd);
+    if (ret != 0) throwexception("upload failed");
     return makenone();
 }
 
@@ -181,5 +163,6 @@ void registerpackagelib(environment *env) {
     envset(mod->module.exports, "search", makebuiltin(packagesearch), 0);
     envset(mod->module.exports, "uninstall", makebuiltin(packageuninstall), 0);
     envset(mod->module.exports, "update", makebuiltin(packageupdate), 0);
+    envset(mod->module.exports, "upload", makebuiltin(packageupload), 0);
     envset(env, "package", mod, 0);
 }
