@@ -46,7 +46,7 @@ void bytecodeemitconst(bytecode *bc, object *obj, int line) {
         bc->constants = realloc(bc->constants, (bc->constcount + 1) * sizeof(object*));
         bc->constants[bc->constcount++] = obj;
     }
-    bytecodeemit(bc, OPLOADCONST, line);
+    bytecodeemit(bc, oploadconst, line);
     bytecodeemitint(bc, idx, line);
 }
 
@@ -69,7 +69,6 @@ int bytecodeemitname(bytecode *bc, char *name, int line) {
 void bytecodefree(bytecode *bc) {
     free(bc->code);
     free(bc->lines);
-    for (int i = 0; i < bc->constcount; i++) {}
     free(bc->constants);
     for (int i = 0; i < bc->namecount; i++) free(bc->names[i]);
     free(bc->names);
