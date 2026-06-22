@@ -1,0 +1,119 @@
+let http = require("http")
+let path = require("path")
+let os = require("os")
+
+let packagedir = "./packages"
+let registryfile = "./registry.json"
+
+let loadregistry = fn() {
+    if path.exists(registryfile) {
+        let data = readfile(registryfile)
+        return json.loads(data)
+    }
+    return {"packages": {}}
+}
+
+let saveregistry = fn(data) {
+    writefile(registryfile, json.dumps(data))
+}
+
+let ensurepackagedir = fn() {
+    if not path.isdir(packagedir) {
+        os.mkdir(packagedir)
+    }
+}
+
+let handleupload = fn(req) {
+    let name = req.form["name"]
+    let version = req.form["version"]
+    let author = req.form["author"]
+    let content = req.body
+    if not name {
+        return http.json({"error": "name required"})
+    }
+    ensurepackagedir()
+    let pkgid = name + "-" + version
+    let pkgpath = packagedir + "/" + pkgid
+    os.mkdir(pkgpath)
+    writefile(pkgpath + "/" + name + ".ax", content)
+    let registry = loadregistry()
+    if not registry["packages"][name] {
+        registry["packages"][name] = []
+    }
+    registry["packages"][name].append({
+        "version": version,
+        "author": author,
+        "id": pkgid
+    })
+    saveregistry(registry)
+    return http.json({"status": "ok", "id": pkgid})
+}
+
+let handledownload = fn(req) {
+    let name = req.query["name"]
+    let version = req.query["version"]
+    let registry = loadregistry()
+    if not registry["packages"][name] {
+        return http.status(404)
+    }
+    let versions = registry["packages"][name]
+    let selected = versions[-1]
+    if version {
+        for v in versions {
+            if v["version"] == version {
+                selected = v
+                break
+            }
+        }
+    }
+    let pkgpath = packagedir + "/" + selected["id"] + "/" + name + ".ax"
+    if not path.exists(pkgpath) {
+        return http.status(404)
+    }
+    let content = readfile(pkgpath)
+    return http.html(content)
+}
+
+let handlesearch = fn(req) {
+    let query = req.query["q"]
+    let registry = loadregistry()
+    let results = []
+    for name, versions in registry["packages"] {
+        if name.find(query) >= 0 {
+            results.append({
+                "name": name,
+                "latest": versions[-1]["version"],
+                "author": versions[-1]["author"]
+            })
+        }
+    }
+    return http.json(results)
+}
+
+let handlelist = fn(req) {
+    let registry = loadregistry()
+    let names = []
+    for name in registry["packages"] {
+        names.append(name)
+    }
+    return http.json(names)
+}
+
+http.serve(5000, fn(req) {
+    let path = req.path
+    if path == "/upload" and req.method == "POST" {
+        return handleupload(req)
+    }
+    if path == "/download" and req.method == "GET" {
+        return handledownload(req)
+    }
+    if path == "/search" and req.method == "GET" {
+        return handlesearch(req)
+    }
+    if path == "/list" and req.method == "GET" {
+        return handlelist(req)
+    }
+    return http.status(404)
+})
+
+print("axton registry running on port 5000")
