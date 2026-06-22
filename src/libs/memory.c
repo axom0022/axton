@@ -1,8 +1,8 @@
 #include "../core/axton.h"
 
-object *memalloc(object **args, int argc, void *env) {
-    if (argc < 1) throwexception("alloc needs size");
-    int size = args[0]->ival;
+object *memalloc(object **a, int c, void *e) {
+    if (c < 1) throwexception("alloc needs size");
+    int size = a[0]->ival;
     void *ptr = platformallocate(size);
     if (!ptr) throwexception("allocation failed");
     object *block = makememoryblock(size);
@@ -12,9 +12,9 @@ object *memalloc(object **args, int argc, void *env) {
     return block;
 }
 
-object *memfree(object **args, int argc, void *env) {
-    if (argc < 1) throwexception("free needs memory block");
-    object *block = args[0];
+object *memfree(object **a, int c, void *e) {
+    if (c < 1) throwexception("free needs memory block");
+    object *block = a[0];
     if (block->type != 78) throwexception("not a memory block");
     platformdeallocate(block->memblock.memory);
     block->memblock.memory = NULL;
@@ -22,12 +22,12 @@ object *memfree(object **args, int argc, void *env) {
     return makenone();
 }
 
-object *memread(object **args, int argc, void *env) {
-    if (argc < 3) throwexception("read needs block offset size");
-    object *block = args[0];
+object *memread(object **a, int c, void *e) {
+    if (c < 3) throwexception("read needs block offset size");
+    object *block = a[0];
     if (block->type != 78) throwexception("not a memory block");
-    int offset = args[1]->ival;
-    int size = args[2]->ival;
+    int offset = a[1]->ival;
+    int size = a[2]->ival;
     if (offset + size > block->memblock.size) throwexception("out of bounds");
     char *buf = malloc(size + 1);
     memcpy(buf, (char*)block->memblock.memory + offset, size);
@@ -37,37 +37,37 @@ object *memread(object **args, int argc, void *env) {
     return result;
 }
 
-object *memwrite(object **args, int argc, void *env) {
-    if (argc < 3) throwexception("write needs block offset data");
-    object *block = args[0];
+object *memwrite(object **a, int c, void *e) {
+    if (c < 3) throwexception("write needs block offset data");
+    object *block = a[0];
     if (block->type != 78) throwexception("not a memory block");
-    int offset = args[1]->ival;
-    char *data = args[2]->sval;
+    int offset = a[1]->ival;
+    char *data = a[2]->sval;
     int size = strlen(data);
     if (offset + size > block->memblock.size) throwexception("out of bounds");
     memcpy((char*)block->memblock.memory + offset, data, size);
     return makenone();
 }
 
-object *memgetptr(object **args, int argc, void *env) {
-    if (argc < 1) throwexception("getptr needs block");
-    object *block = args[0];
+object *memgetptr(object **a, int c, void *e) {
+    if (c < 1) throwexception("getptr needs block");
+    object *block = a[0];
     if (block->type != 78) throwexception("not a memory block");
     return makeint((long)block->memblock.memory);
 }
 
-object *memgetsize(object **args, int argc, void *env) {
-    if (argc < 1) throwexception("getsize needs block");
-    object *block = args[0];
+object *memgetsize(object **a, int c, void *e) {
+    if (c < 1) throwexception("getsize needs block");
+    object *block = a[0];
     if (block->type != 78) throwexception("not a memory block");
     return makeint(block->memblock.size);
 }
 
-object *memrealloc(object **args, int argc, void *env) {
-    if (argc < 2) throwexception("realloc needs block and newsize");
-    object *block = args[0];
+object *memrealloc(object **a, int c, void *e) {
+    if (c < 2) throwexception("realloc needs block and newsize");
+    object *block = a[0];
     if (block->type != 78) throwexception("not a memory block");
-    int newsize = args[1]->ival;
+    int newsize = a[1]->ival;
     void *ptr = platformreallocate(block->memblock.memory, newsize);
     if (!ptr) throwexception("reallocation failed");
     block->memblock.memory = ptr;
