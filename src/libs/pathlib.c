@@ -1,63 +1,55 @@
 #include "../core/axton.h"
 #include <sys/stat.h>
+#include <dirent.h>
 
-static char *joinpath(const char *a, const char *b) {
-    int len = strlen(a)+strlen(b)+2;
-    char *res = malloc(len);
-    snprintf(res, len, "%s%c%s", a, PATHSEP, b);
+object *pathjoin(object **a, int c, void *e) {
+    if (c < 1) throwexception("join needs parts");
+    char *result = strdup("");
+    for (int i = 0; i < c; i++) {
+        if (a[i]->type != 2) throwexception("path parts must be strings");
+        char *new = malloc(strlen(result) + strlen(a[i]->sval) + 2);
+        if (strlen(result) > 0) sprintf(new, "%s%c%s", result, PATHSEP, a[i]->sval);
+        else strcpy(new, a[i]->sval);
+        free(result);
+        result = new;
+    }
+    object *res = makestring(result);
+    free(result);
     return res;
 }
 
-object *pathlib_path(object **args, int argc, void *env) {
-    if(argc<1) return makestring(".");
-    char *path = strdup(args[0]->sval);
-    for(int i=1;i<argc;i++){
-        char *newpath = joinpath(path, args[i]->sval);
-        free(path);
-        path = newpath;
-    }
-    object *p = makedict();
-    dictset(p, makestring("_path"), makestring(path), 0);
-    free(path);
-    return p;
-}
-
-object *pathlib_join(object **args, int argc, void *env) {
-    if(argc<2) throwexception("join needs path and *paths");
-    char *base = args[0]->sval;
-    for(int i=1;i<argc;i++){
-        char *newbase = joinpath(base, args[i]->sval);
-        base = newbase;
-    }
-    return makestring(base);
-}
-
-object *pathlib_exists(object **args, int argc, void *env) {
-    if(argc<1) throwexception("exists needs path");
+object *pathexists(object **a, int c, void *e) {
+    if (c < 1) throwexception("exists needs path");
     struct stat st;
-    return makebool(stat(args[0]->sval, &st)==0);
+    return makebool(stat(a[0]->sval, &st) == 0);
 }
 
-object *pathlib_isdir(object **args, int argc, void *env) {
-    if(argc<1) throwexception("isdir needs path");
+object *pathisdir(object **a, int c, void *e) {
+    if (c < 1) throwexception("isdir needs path");
     struct stat st;
-    if(stat(args[0]->sval, &st)!=0) return makebool(0);
+    if (stat(a[0]->sval, &st) != 0) return makebool(0);
     return makebool(S_ISDIR(st.st_mode));
 }
 
-object *pathlib_isfile(object **args, int argc, void *env) {
-    if(argc<1) throwexception("isfile needs path");
+object *pathisfile(object **a, int c, void *e) {
+    if (c < 1) throwexception("isfile needs path");
     struct stat st;
-    if(stat(args[0]->sval, &st)!=0) return makebool(0);
+    if (stat(a[0]->sval, &st) != 0) return makebool(0);
     return makebool(S_ISREG(st.st_mode));
 }
 
-void registerpathliblib(environment *env) {
-    object *mod = makemodule("pathlib", NULL);
-    envset(mod->module.exports, "Path", makebuiltin(pathlib_path), 0);
-    envset(mod->module.exports, "join", makebuiltin(pathlib_join), 0);
-    envset(mod->module.exports, "exists", makebuiltin(pathlib_exists), 0);
-    envset(mod->module.exports, "isdir", makebuiltin(pathlib_isdir), 0);
-    envset(mod->module.exports, "isfile", makebuiltin(pathlib_isfile), 0);
-    envset(env, "pathlib", mod, 0);
+object *pathglob(object **a, int c, void *e) {
+    if (c < 1) throwexception("glob needs pattern");
+    object *list = makelist();
+    return list;
+}
+
+void registerpathlib(environment *env) {
+    object *mod = makemodule("path", NULL);
+    envset(mod->module.exports, "join", makebuiltin(pathjoin), 0);
+    envset(mod->module.exports, "exists", makebuiltin(pathexists), 0);
+    envset(mod->module.exports, "isdir", makebuiltin(pathisdir), 0);
+    envset(mod->module.exports, "isfile", makebuiltin(pathisfile), 0);
+    envset(mod->module.exports, "glob", makebuiltin(pathglob), 0);
+    envset(env, "path", mod, 0);
 }
