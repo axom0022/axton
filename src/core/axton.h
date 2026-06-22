@@ -316,6 +316,10 @@ typedef struct object {
         struct {
             void *tess;
         } ocr;
+        struct {
+            long handle;
+            int pid;
+        } processhandle;
     };
 } object;
 
@@ -375,6 +379,11 @@ typedef struct {
     int (*bluetoothopen)(void);
     int (*bluetoothscan)(int, object*);
     void (*bluetoothclose)(int);
+    int (*processopen)(int, int);
+    int (*processread)(int, long, unsigned char*, int);
+    int (*processwrite)(int, long, unsigned char*, int);
+    void (*processclose)(int);
+    int (*processfind)(const char*);
 } platformapi;
 
 extern environment *globalenv;
@@ -427,6 +436,7 @@ object *makescraper(object *session);
 object *makeosint(object *sources);
 object *makevision(void *engine);
 object *makeocr(void *tess);
+object *makeprocesshandle(long handle, int pid);
 
 void listappend(object *list, object *item);
 object *listpop(object *list, int index);
@@ -494,6 +504,11 @@ void platformpcapclose(int handle);
 int platformbluetoothopen(void);
 int platformbluetoothscan(int handle, object *devices);
 void platformbluetoothclose(int handle);
+int platformprocessopen(int pid, int flags);
+int platformprocessread(int handle, long address, unsigned char *buf, int size);
+int platformprocesswrite(int handle, long address, unsigned char *buf, int size);
+void platformprocessclose(int handle);
+int platformprocessfind(const char *name);
 
 void registerhttplib(environment *env);
 void registerwebsocketlib(environment *env);
@@ -538,5 +553,6 @@ void registerscriptlib(environment *env);
 void registerosintlib(environment *env);
 void registervisionlib(environment *env);
 void registerocrlib(environment *env);
+void registerprocesslib(environment *env);
 
 #endif
