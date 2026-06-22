@@ -63,6 +63,11 @@ void register3dlib(environment *env);
 void registermemorylib(environment *env);
 void registerweblib(environment *env);
 void registerpackagelib(environment *env);
+void registersecuritylib(environment *env);
+void registerscriptlib(environment *env);
+void registerosintlib(environment *env);
+void registervisionlib(environment *env);
+void registerocrlib(environment *env);
 
 void registeralllibs(environment *env) {
     registerstdlib(env);
@@ -128,4 +133,9 @@ void registeralllibs(environment *env) {
     registermemorylib(env);
     registerweblib(env);
     registerpackagelib(env);
+    registersecuritylib(env);
+    registerscriptlib(env);
+    registerosintlib(env);
+    registervisionlib(env);
+    registerocrlib(env);
 }
