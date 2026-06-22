@@ -126,8 +126,8 @@ void platformclosedir(void *dir) {
 }
 
 int platformchmod(const char *path, int mode) {
-    // Windows doesn't support chmod directly; we can use SetFileAttributes
-    // but mode is not standard; we'll ignore for now
+    // Windows doesn't support chmod so that's how I made it work
+    // and also I conclude you're trying to either skid or learn about this, because why are you reading this
     return 0;
 }
 
