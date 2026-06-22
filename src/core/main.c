@@ -14,6 +14,7 @@ static int rununinstall(int argc, char **argv);
 static int runlist(void);
 static int runsearch(int argc, char **argv);
 static int runupdate(int argc, char **argv);
+static int runupload(int argc, char **argv);
 
 object *builtinhelp(object **args, int argc, environment *env) {
     platformlog("axton language\n");
@@ -30,8 +31,9 @@ object *builtinhelp(object **args, int argc, environment *env) {
     platformlog("  axton search <query>  search registry\n");
     platformlog("  axton update <pkg>    update package\n");
     platformlog("  axton update --all    update all packages\n");
+    platformlog("  axton upload <file>   upload package to registry\n");
+    platformlog("  axton registry        start registry server\n");
     platformlog("\n");
-    platformlog("see docs for full module list\n");
     return makenone();
 }
 
@@ -69,6 +71,13 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[1], "update") == 0) {
         return runupdate(argc, argv);
+    }
+    if (strcmp(argv[1], "upload") == 0) {
+        return runupload(argc, argv);
+    }
+    if (strcmp(argv[1], "registry") == 0) {
+        runfile("registry.ax");
+        return 0;
     }
     if (strcmp(argv[1], "--compile") == 0 && argc > 2) {
         runfile(argv[2]);
@@ -119,12 +128,22 @@ static int runinstall(int argc, char **argv) {
         return 1;
     }
     char *name = argv[2];
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "axton_install %s", name);
-    int ret = system(cmd);
-    if (ret != 0) {
-        platformlog("install failed\n");
-        return 1;
+    char *version = (argc > 3) ? argv[3] : NULL;
+    char code[1024];
+    if (version) {
+        snprintf(code, sizeof(code), "let p=require('package');p.install('%s','%s')", name, version);
+    } else {
+        snprintf(code, sizeof(code), "let p=require('package');p.install('%s')", name);
+    }
+    token *toks = tokenize(code);
+    stmt *prog = parsetokens(toks, tcount);
+    frame frm;
+    currentframe = &frm;
+    if (setjmp(frm.jump) == 0) {
+        evalprogram(prog, globalenv);
+    } else {
+        object *ex = catchexception();
+        if (ex && ex->type == 2) { platformlog("error: "); platformlog(ex->sval); platformlog("\n"); return 1; }
     }
     platformlog("installed ");
     platformlog(name);
@@ -139,7 +158,7 @@ static int rununinstall(int argc, char **argv) {
     }
     char *name = argv[2];
     char cmd[512];
-    snprintf(cmd, sizeof(cmd), "rm -rf packages/%s", name);
+    snprintf(cmd, sizeof(cmd), "rm -f packages/%s.ax", name);
     system(cmd);
     platformlog("uninstalled ");
     platformlog(name);
@@ -148,7 +167,7 @@ static int rununinstall(int argc, char **argv) {
 }
 
 static int runlist(void) {
-    system("ls -1 packages/ 2>/dev/null || echo 'no packages installed'");
+    system("ls -1 packages/*.ax 2>/dev/null | sed 's/packages\\///' | sed 's/.ax$//' || echo 'no packages installed'");
     return 0;
 }
 
@@ -157,14 +176,18 @@ static int runsearch(int argc, char **argv) {
         platformlog("usage: axton search <query>\n");
         return 1;
     }
-    platformlog("searching registry for ");
-    platformlog(argv[2]);
-    platformlog("...\n");
-    platformlog("  mystats - statistics library\n");
-    platformlog("  httpclient - http client\n");
-    platformlog("  websocket - websocket library\n");
-    platformlog("  cryptoutils - encryption utilities\n");
-    platformlog("  jsonutils - json helpers\n");
+    char code[512];
+    snprintf(code, sizeof(code), "let p=require('package');let r=p.search('%s');for i in r{print(i)}", argv[2]);
+    token *toks = tokenize(code);
+    stmt *prog = parsetokens(toks, tcount);
+    frame frm;
+    currentframe = &frm;
+    if (setjmp(frm.jump) == 0) {
+        evalprogram(prog, globalenv);
+    } else {
+        object *ex = catchexception();
+        if (ex && ex->type == 2) { platformlog("error: "); platformlog(ex->sval); platformlog("\n"); return 1; }
+    }
     return 0;
 }
 
@@ -174,15 +197,52 @@ static int runupdate(int argc, char **argv) {
         return 1;
     }
     if (strcmp(argv[2], "--all") == 0) {
-        system("for pkg in packages/*; do cd $pkg && git pull; cd -; done 2>/dev/null");
+        system("for pkg in packages/*.ax; do name=$(basename $pkg .ax); axton update $name; done 2>/dev/null");
         platformlog("all packages updated\n");
     } else {
-        char cmd[512];
-        snprintf(cmd, sizeof(cmd), "cd packages/%s && git pull 2>/dev/null", argv[2]);
-        system(cmd);
+        char *name = argv[2];
+        char code[512];
+        snprintf(code, sizeof(code), "let p=require('package');p.update('%s')", name);
+        token *toks = tokenize(code);
+        stmt *prog = parsetokens(toks, tcount);
+        frame frm;
+        currentframe = &frm;
+        if (setjmp(frm.jump) == 0) {
+            evalprogram(prog, globalenv);
+        } else {
+            object *ex = catchexception();
+            if (ex && ex->type == 2) { platformlog("error: "); platformlog(ex->sval); platformlog("\n"); return 1; }
+        }
         platformlog("updated ");
-        platformlog(argv[2]);
+        platformlog(name);
         platformlog("\n");
     }
+    return 0;
+}
+
+static int runupload(int argc, char **argv) {
+    if (argc < 5) {
+        platformlog("usage: axton upload <file.ax> <name> <version> <author>\n");
+        return 1;
+    }
+    char *file = argv[2];
+    char *name = argv[3];
+    char *version = argv[4];
+    char *author = (argc > 5) ? argv[5] : "anonymous";
+    char code[1024];
+    snprintf(code, sizeof(code), "let p=require('package');p.upload('%s','%s','%s')", name, version, author);
+    token *toks = tokenize(code);
+    stmt *prog = parsetokens(toks, tcount);
+    frame frm;
+    currentframe = &frm;
+    if (setjmp(frm.jump) == 0) {
+        evalprogram(prog, globalenv);
+    } else {
+        object *ex = catchexception();
+        if (ex && ex->type == 2) { platformlog("error: "); platformlog(ex->sval); platformlog("\n"); return 1; }
+    }
+    platformlog("uploaded ");
+    platformlog(name);
+    platformlog(" to registry\n");
     return 0;
 }
