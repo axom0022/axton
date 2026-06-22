@@ -1,5 +1,5 @@
-#include "axton.h"
-#include "bytecode.h"
+#include "vm.h"
+#include <stdlib.h>
 
 typedef struct vmframe {
     object **stack;
@@ -12,24 +12,24 @@ typedef struct vmframe {
     struct vmframe *prev;
 } vmframe;
 
-static vmframe *currentframe = NULL;
-static bytecode *currentbc = NULL;
+static vmframe *curframe = NULL;
+static bytecode *curbc = NULL;
 
 static void push(object *o) {
-    if (currentframe->stacksize >= currentframe->stackcap) {
-        currentframe->stackcap *= 2;
-        currentframe->stack = realloc(currentframe->stack, currentframe->stackcap * sizeof(object*));
+    if (curframe->stacksize >= curframe->stackcap) {
+        curframe->stackcap *= 2;
+        curframe->stack = realloc(curframe->stack, curframe->stackcap * sizeof(object*));
     }
-    currentframe->stack[currentframe->stacksize++] = o;
+    curframe->stack[curframe->stacksize++] = o;
 }
 
 static object *pop(void) {
-    if (currentframe->stacksize == 0) return makenone();
-    return currentframe->stack[--currentframe->stacksize];
+    if (curframe->stacksize == 0) return makenone();
+    return curframe->stack[--curframe->stacksize];
 }
 
-static object *vmrun(bytecode *bc, environment *env) {
-    currentbc = bc;
+object *executebytecode(bytecode *bc, environment *env) {
+    curbc = bc;
     vmframe frame;
     frame.stackcap = 256;
     frame.stacksize = 0;
@@ -39,61 +39,58 @@ static object *vmrun(bytecode *bc, environment *env) {
     frame.localcount = bc->namecount;
     frame.locals = calloc(frame.localcount, sizeof(object*));
     frame.prev = NULL;
-    currentframe = &frame;
+    curframe = &frame;
 
     while (1) {
         unsigned char op = *frame.ip++;
-        int line = 0;
-        (void)line;
-        int idx, a, b, c, d;
+        int idx;
         switch (op) {
-            case OPLOADCONST:
+            case oploadconst:
                 idx = (frame.ip[0] << 24) | (frame.ip[1] << 16) | (frame.ip[2] << 8) | frame.ip[3];
                 frame.ip += 4;
                 push(bc->constants[idx]);
                 break;
-            case OPLOADVAR:
+            case oploadvar:
                 idx = (frame.ip[0] << 24) | (frame.ip[1] << 16) | (frame.ip[2] << 8) | frame.ip[3];
                 frame.ip += 4;
                 push(frame.locals[idx]);
                 break;
-            case OPSTOREVAR:
+            case opstorevar:
                 idx = (frame.ip[0] << 24) | (frame.ip[1] << 16) | (frame.ip[2] << 8) | frame.ip[3];
                 frame.ip += 4;
                 frame.locals[idx] = pop();
                 break;
-            case OPADD: {
+            case opadd: {
                 object *right = pop();
                 object *left = pop();
                 push(addvalues(left, right));
                 break;
             }
-            case OPSUB: {
+            case opsub: {
                 object *right = pop();
                 object *left = pop();
                 push(subvalues(left, right));
                 break;
             }
-            case OPMUL: {
+            case opmul: {
                 object *right = pop();
                 object *left = pop();
                 push(mulvalues(left, right));
                 break;
             }
-            case OPDIV: {
+            case opdiv: {
                 object *right = pop();
                 object *left = pop();
                 push(divvalues(left, right));
                 break;
             }
-            case OPPOP:
+            case oppop:
                 pop();
                 break;
-            case OPRETURN: {
+            case opreturn: {
                 object *result = pop();
                 free(frame.stack);
                 free(frame.locals);
-                currentframe = frame.prev;
                 return result;
             }
             default:
@@ -102,8 +99,4 @@ static object *vmrun(bytecode *bc, environment *env) {
         }
     }
     return makenone();
-}
-
-object *executebytecode(bytecode *bc, environment *env) {
-    return vmrun(bc, env);
 }
