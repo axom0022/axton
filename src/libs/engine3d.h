@@ -12,7 +12,6 @@ typedef struct etransform etransform;
 typedef struct erigidbody erigidbody;
 typedef struct eparticle eparticle;
 typedef struct eanimation eanimation;
-typedef struct ebone ebone;
 typedef struct eterrain eterrain;
 
 escene *esccreate(void);
