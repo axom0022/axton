@@ -69,6 +69,7 @@ void registerosintlib(environment *env);
 void registervisionlib(environment *env);
 void registerocrlib(environment *env);
 void registerprocesslib(environment *env);
+void registeroverlaylib(environment *env);
 
 void registeralllibs(environment *env) {
     registerstdlib(env);
@@ -140,4 +141,5 @@ void registeralllibs(environment *env) {
     registervisionlib(env);
     registerocrlib(env);
     registerprocesslib(env);
+    registeroverlaylib(env);
 }
