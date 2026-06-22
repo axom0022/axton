@@ -1,5 +1,5 @@
-#ifndef COMPILER_H
-#define COMPILER_H
+#ifndef compiler_h
+#define compiler_h
 
 #include "axton.h"
 #include "bytecode.h"
