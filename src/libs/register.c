@@ -70,6 +70,11 @@ void registervisionlib(environment *env);
 void registerocrlib(environment *env);
 void registerprocesslib(environment *env);
 void registeroverlaylib(environment *env);
+void registerinputlib(environment *env);
+void registerphysicslib(environment *env);
+void registerecslib(environment *env);
+void registeranimationlib(environment *env);
+void registeraudiolib(environment *env);
 
 void registeralllibs(environment *env) {
     registerstdlib(env);
@@ -142,4 +147,9 @@ void registeralllibs(environment *env) {
     registerocrlib(env);
     registerprocesslib(env);
     registeroverlaylib(env);
+    registerinputlib(env);
+    registerphysicslib(env);
+    registerecslib(env);
+    registeranimationlib(env);
+    registeraudiolib(env);
 }
