@@ -75,6 +75,10 @@ void registerphysicslib(environment *env);
 void registerecslib(environment *env);
 void registeranimationlib(environment *env);
 void registeraudiolib(environment *env);
+void registerrenderlib(environment *env);
+void registerphysicsextralib(environment *env);
+void registernetworklib(environment *env);
+void registerassetlib(environment *env);
 
 void registeralllibs(environment *env) {
     registerstdlib(env);
@@ -152,4 +156,8 @@ void registeralllibs(environment *env) {
     registerecslib(env);
     registeranimationlib(env);
     registeraudiolib(env);
+    registerrenderlib(env);
+    registerphysicsextralib(env);
+    registernetworklib(env);
+    registerassetlib(env);
 }
