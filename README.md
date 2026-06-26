@@ -1,4 +1,4 @@
-# AXTON 
+# AXTON (under development) 
 *coding language everywhere*
 `files that are coded in axton will have .ax`
 all os :
@@ -19,8 +19,8 @@ Linux & Mac :
 
 Windows :
 ```git clone https://github.com/axom0022/axton.git```
-```cd axton```
-```gcc -o axton.exe src/core/*.c src/platform/windows.c -lm```
+```cd ~/axton```
+```gcc -o axton.exe src/core/*.c src/platform/windows.c src/tools/*.c src/libs/*.c -lm -lws2_32 -lsqlite3 -lssl -lcrypto -lcurl -lffi```
 ```axton.exe myfile.ax```
 
 
