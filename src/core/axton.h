@@ -58,6 +58,17 @@
 #include <png.h>
 #include <tesseract/capi.h>
 
+#include <ffi.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <GL/glx.h>
+#include <GL/glext.h>
+#include <GL/glxext.h>
+
+#include <webrtc.h>
+#include <imgui.h>
+#include <renderdoc_app.h>
+
 typedef enum {
     TOKEOF, TOKIDENT, TOKNUMBER, TOKSTRING, TOKINDENT, TOKDEDENT, TOKNEWLINE,
     TOKLET, TOKCONST, TOKFN, TOKIF, TOKELSE, TOKELIF,
@@ -84,6 +95,7 @@ typedef struct token {
 
 typedef struct node {
     int line;
+    char *file;
 } node;
 
 typedef struct expr {
@@ -103,6 +115,8 @@ typedef struct object {
     int marked;
     int refcount;
     int type;
+    char *file;
+    int line;
     union {
         long ival;
         double fval;
@@ -320,6 +334,66 @@ typedef struct object {
             long handle;
             int pid;
         } processhandle;
+        struct {
+            void *peerconnection;
+            void *datachannel;
+        } webrtc;
+        struct {
+            int fd;
+            char *url;
+            int connected;
+        } wsclient;
+        struct {
+            SSL *ssl;
+            SSL_CTX *ctx;
+            int fd;
+        } sslconn;
+        struct {
+            void *capture;
+            int enabled;
+        } renderdoc;
+        struct {
+            void *context;
+            void *window;
+            int active;
+        } imgui;
+        struct {
+            void *data;
+            int vertexcount;
+            int indexcount;
+            float *vertices;
+            int *indices;
+        } gltf;
+        struct {
+            float *positions;
+            int count;
+            int color[3];
+        } debugphys;
+        struct {
+            void *dev;
+            void *context;
+            int channels;
+            float volume;
+        } audiomix;
+        struct {
+            void *stream;
+            void *decoder;
+            int w,h;
+            float fps;
+        } video;
+        struct {
+            int codepoint;
+            char utf8[8];
+        } unicode;
+        struct {
+            void *server;
+            int port;
+            int running;
+        } lsp;
+        struct {
+            object *rules;
+            int count;
+        } linter;
     };
 } object;
 
@@ -340,6 +414,8 @@ typedef struct {
     struct frame *prev;
     struct environment *env;
     struct object *generator;
+    char *file;
+    int line;
 } frame;
 
 typedef struct {
@@ -384,6 +460,31 @@ typedef struct {
     int (*processwrite)(int, long, unsigned char*, int);
     void (*processclose)(int);
     int (*processfind)(const char*);
+    int (*sslinit)(void);
+    void *(*sslctxnew)(void);
+    void *(*sslnew)(void*);
+    int (*sslconnect)(void*, int);
+    int (*sslwrite)(void*, const char*, int);
+    int (*sslread)(void*, char*, int);
+    void (*sslclose)(void*);
+    void (*ssldestroy)(void*);
+    int (*renderdocstart)(void);
+    void (*renderdocend)(void);
+    void (*imguiinit)(void*);
+    void (*imguiupdate)(void*);
+    void (*imguirender)(void*);
+    void *(*gltfload)(const char*);
+    void (*physdebugdraw)(float*, int, int, int);
+    void *(*audiomixcreate)(int);
+    void (*audiomixadd)(void*, float*, int);
+    void (*audiomixplay)(void*);
+    void *(*videocreate)(void);
+    int (*videoload)(void*, const char*);
+    int (*videoplay)(void*);
+    int (*videoframe)(void*, unsigned char**);
+    int (*unicodechar)(const char*);
+    void (*lspstart)(int);
+    void (*linteraddrule)(void*, const char*, const char*);
 } platformapi;
 
 extern environment *globalenv;
@@ -437,6 +538,18 @@ object *makeosint(object *sources);
 object *makevision(void *engine);
 object *makeocr(void *tess);
 object *makeprocesshandle(long handle, int pid);
+object *makewebrtc(void *pc, void *dc);
+object *makewsclient(int fd, char *url);
+object *makesslconn(SSL *ssl, SSL_CTX *ctx, int fd);
+object *makerenderdoc(void *cap);
+object *makeimgui(void *ctx, void *win);
+object *makegltf(void *data, int vc, int ic, float *verts, int *inds);
+object *makedebugphys(float *pos, int count, int r, int g, int b);
+object *makeaudiomix(void *dev, void *ctx, int ch, float vol);
+object *makevideo(void *stream, void *dec, int w, int h, float fps);
+object *makeunicode(int cp, char *utf);
+object *makelsp(void *srv, int port, int run);
+object *makelinter(object *rules, int count);
 
 void listappend(object *list, object *item);
 object *listpop(object *list, int index);
@@ -509,6 +622,31 @@ int platformprocessread(int handle, long address, unsigned char *buf, int size);
 int platformprocesswrite(int handle, long address, unsigned char *buf, int size);
 void platformprocessclose(int handle);
 int platformprocessfind(const char *name);
+int platformsslinit(void);
+void *platformsslctxnew(void);
+void *platformsslnew(void *ctx);
+int platformsslconnect(void *ssl, int fd);
+int platformsslwrite(void *ssl, const char *data, int len);
+int platformsslread(void *ssl, char *buf, int len);
+void platformsslclose(void *ssl);
+void platformssldestroy(void *ssl);
+int platformrenderdocstart(void);
+void platformrenderdocend(void);
+void platformimguiinit(void *window);
+void platformimguiupdate(void *window);
+void platformimguirender(void *window);
+void *platformgltfload(const char *path);
+void platformphysdebugdraw(float *pos, int count, int r, int g, int b);
+void *platformaudiomixcreate(int channels);
+void platformaudiomixadd(void *mix, float *samples, int count);
+void platformaudiomixplay(void *mix);
+void *platformvideocreate(void);
+int platformvideoload(void *vid, const char *path);
+int platformvideoplay(void *vid);
+int platformvideoframe(void *vid, unsigned char **data);
+int platformunicodechar(const char *utf8);
+void platformlspstart(int port);
+void platformlinteraddrule(void *linter, const char *name, const char *pattern);
 
 void registerhttplib(environment *env);
 void registerwebsocketlib(environment *env);
@@ -554,5 +692,118 @@ void registerosintlib(environment *env);
 void registervisionlib(environment *env);
 void registerocrlib(environment *env);
 void registerprocesslib(environment *env);
+void registeroverlaylib(environment *env);
+void registerinputlib(environment *env);
+void registerphysicslib(environment *env);
+void registerecslib(environment *env);
+void registeranimationlib(environment *env);
+void registeraudiolib(environment *env);
+void registerrenderlib(environment *env);
+void registerphysicsextralib(environment *env);
+void registernetworklib(environment *env);
+void registerassetlib(environment *env);
+void registerframedebuglib(environment *env);
+void registerperfproflib(environment *env);
+void registerbuildsyslib(environment *env);
+void registerassetpip elib(environment *env);
+void registerfluidlib(environment *env);
+void registeriklib(environment *env);
+void registermorphlib(environment *env);
+void registerhotreloadlib(environment *env);
+void registervolfoglib(environment *env);
+void registermotionblurlib(environment *env);
+void registerantialiaslib(environment *env);
+void registerinstancinglib(environment *env);
+void registerlodlib(environment *env);
+void registerfrustumlib(environment *env);
+void registerocclusionlib(environment *env);
+void registergpuparticleslib(environment *env);
+void registercompoundlib(environment *env);
+void registerterrainphyslib(environment *env);
+void registerbuoyancylib(environment *env);
+void registerwindlib(environment *env);
+void registerexplosionlib(environment *env);
+void registersurfacedetaillib(environment *env);
+void registergilibrary(environment *env);
+void registeranimretargetlib(environment *env);
+void registerrootmotionlib(environment *env);
+void registeranimeventlib(environment *env);
+void registerprocanimlib(environment *env);
+void registermocaplib(environment *env);
+void registeranimcomplib(environment *env);
+void registeraudioocclib(environment *env);
+void registeraudiostrelib(environment *env);
+void registeraudiomixlib(environment *env);
+void registeraudiofxlib(environment *env);
+void registerspatialaudiolib(environment *env);
+void registermidilib(environment *env);
+void registergesturelib(environment *env);
+void registervoiceinlib(environment *env);
+void registermultitouchlib(environment *env);
+void registervrctrllib(environment *env);
+void registerhapticlib(environment *env);
+void registerlagcomplib(environment *env);
+void registerpredictlib(environment *env);
+void registerinterplib(environment *env);
+void registerreplicationlib(environment *env);
+void registernatlib(environment *env);
+void registermatchmakinglib(environment *env);
+void registerlobbieslib(environment *env);
+void registervoicechatlib(environment *env);
+void registercloudsavelib(environment *env);
+void registersteamlib(environment *env);
+void registerepiclib(environment *env);
+void registergoaplib(environment *env);
+void registermctslib(environment *env);
+void registerrllib(environment *env);
+void registerperceptionlib(environment *env);
+void registerteamailib(environment *env);
+void registerfuzzylib(environment *env);
+void registerutilityailib(environment *env);
+void registermateditorlib(environment *env);
+void registershadeditorlib(environment *env);
+void registeranimateditorlib(environment *env);
+void registerprefablib(environment *env);
+void registerseencelib(environment *env);
+void registerterraineditlib(environment *env);
+void registerparteditlib(environment *env);
+void registeruieditlib(environment *env);
+void registermemproflib(environment *env);
+void registerassetbrowserlib(environment *env);
+void registerconsolelib(environment *env);
+void registerscriptdebuglib(environment *env);
+void registervclib(environment *env);
+void registersteampublib(environment *env);
+void registeritchiolib(environment *env);
+void registerepicstorelib(environment *env);
+void registerpslib(environment *env);
+void registerxboxlib(environment *env);
+void registernintendolib(environment *env);
+void registermobilelib(environment *env);
+void registeranalyticslib(environment *env);
+void registercrashlib(environment *env);
+void registerachievementslib(environment *env);
+void registerleaderboardslib(environment *env);
+void registeriaplib(environment *env);
+void registerantipiracylib(environment *env);
+void registerdr mlib(environment *env);
+void registerobjectpoollib(environment *env);
+void registereventsyslib(environment *env);
+void registerserviceloclib(environment *env);
+void registerdilib(environment *env);
+void registercoroutinelib(environment *env);
+void registertimerlib(environment *env);
+void registerwebrtclib(environment *env);
+void registerwsclientlib(environment *env);
+void registerssllib(environment *env);
+void registerrenderdoclib(environment *env);
+void registerimguilib(environment *env);
+void registergltflib(environment *env);
+void registerphysdebuglib(environment *env);
+void registeraudiomixerlib(environment *env);
+void registervideolib(environment *env);
+void registerunicodelib(environment *env);
+void registerlsplib(environment *env);
+void registerlinterlib(environment *env);
 
 #endif
