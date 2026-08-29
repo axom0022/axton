@@ -1,0 +1,62 @@
+let width = 40
+let height = 20
+let lefty = 10
+let righty = 10
+let ballx = 20
+let bally = 10
+let balldx = 1
+let balldy = 1
+
+let draw = fn() {
+    print("")
+    for y in range(height) {
+        let line = ""
+        for x in range(width) {
+            if x == 0 and y == lefty or x == 0 and y == lefty+1 or x == 0 and y == lefty+2 {
+                line = line + "|"
+            } elif x == width-1 and y == righty or x == width-1 and y == righty+1 or x == width-1 and y == righty+2 {
+                line = line + "|"
+            } elif x == ballx and y == bally {
+                line = line + "O"
+            } else {
+                line = line + "."
+            }
+        }
+        print(line)
+    }
+}
+
+let step = fn() {
+    ballx = ballx + balldx
+    bally = bally + balldy
+    if bally <= 0 or bally >= height-1 {
+        balldy = -balldy
+    }
+    if ballx <= 1 and bally >= lefty and bally <= lefty+2 {
+        balldx = -balldx
+    }
+    if ballx >= width-2 and bally >= righty and bally <= righty+2 {
+        balldx = -balldx
+    }
+    if ballx < 0 or ballx >= width {
+        return false
+    }
+    return true
+}
+
+let inputfn = fn() {
+    let cmd = input("> ")
+    if cmd == "w" { lefty = lefty - 1 }
+    elif cmd == "s" { lefty = lefty + 1 }
+    if cmd == "i" { righty = righty - 1 }
+    elif cmd == "k" { righty = righty + 1 }
+}
+
+while true {
+    draw()
+    inputfn()
+    if not step() {
+        print("game over!")
+        break
+    }
+              }
