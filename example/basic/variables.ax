@@ -1,0 +1,12 @@
+let x = 10
+let y = 20
+let z = x + y
+print("x + y = " + str(z))
+
+let list = [1, 2, 3, 4, 5]
+for i in list {
+    print(i)
+}
+
+let dict = {"name": "alice", "age": 30}
+  print(dict["name"])
