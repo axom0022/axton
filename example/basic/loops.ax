@@ -1,0 +1,14 @@
+for i in range(10) {
+    print("count " + str(i))
+}
+
+let names = ["alice", "bob", "charlie"]
+for name in names {
+    print("hello " + name)
+}
+
+let i = 0
+while i < 5 {
+    print("while " + str(i))
+    i = i + 1
+}
