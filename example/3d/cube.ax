@@ -1,0 +1,41 @@
+import "engine3d"
+
+e3d.init(1280, 720)
+
+let scene = e3d.createscene()
+
+let cam = e3d.camcreate(70, 1280/720, 0.1, 100)
+e3d.camsetposition(cam, 0, 0, 5)
+e3d.camsettarget(cam, 0, 0, 0)
+e3d.setcamera(scene, cam)
+
+let mesh = e3d.meshcreate()
+let verts = [
+    -0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5,
+    -0.5,-0.5,-0.5, 0.5,-0.5,-0.5, 0.5,0.5,-0.5, -0.5,0.5,-0.5
+]
+let inds = [
+    0,1,2, 0,2,3, 1,5,6, 1,6,2, 5,4,7, 5,7,6,
+    4,0,3, 4,3,7, 3,2,6, 3,6,7, 4,5,1, 4,1,0
+]
+e3d.meshsetvertices(mesh, verts)
+e3d.meshsetindices(mesh, inds)
+
+let mat = e3d.matcreate()
+e3d.matsetdiffuse(mat, 1, 0, 0)
+
+let trans = e3d.transcreate()
+e3d.addmesh(scene, mesh, trans, mat)
+
+let light = e3d.lightcreate(0)
+e3d.lightsetpos(light, 5, 10, 5)
+e3d.addlight(scene, light)
+
+e3d.setbackground(0.1, 0.1, 0.2)
+
+let angle = 0
+while true {
+    angle = angle + 0.01
+    e3d.transsetrot(trans, angle, angle, 0)
+    e3d.renderframe(scene)
+}
