@@ -1,0 +1,40 @@
+import "http"
+import "db"
+
+let conn = db.connect("users.db")
+db.execute(conn, "create table if not exists users (id integer primary key, name text, age integer)")
+
+http.createserver(5000)
+
+http.get("/users", fn(req) {
+    let users = db.query(conn, "select * from users")
+    return http.json(users)
+})
+
+http.post("/users", fn(req) {
+    let data = req.json
+    db.execute(conn, "insert into users (name, age) values ('" + data.name + "', " + str(data.age) + ")")
+    return http.json({"status": "created"})
+})
+
+http.get("/users/:id", fn(req) {
+    let id = req.params.id
+    let user = db.query(conn, "select * from users where id = " + id)
+    return http.json(user)
+})
+
+http.put("/users/:id", fn(req) {
+    let id = req.params.id
+    let data = req.json
+    db.execute(conn, "update users set name = '" + data.name + "', age = " + str(data.age) + " where id = " + id)
+    return http.json({"status": "updated"})
+})
+
+http.delete("/users/:id", fn(req) {
+    let id = req.params.id
+    db.execute(conn, "delete from users where id = " + id)
+    return http.json({"status": "deleted"})
+})
+
+http.start()
+print("api running on port 5000")
