@@ -1,0 +1,33 @@
+import "gui"
+
+let win = gui.window("calculator", 300, 400)
+
+let display = gui.textbox(win, 10, 10, 280, fn() {})
+
+let makebutton = fn(text, x, y, w, h) {
+    gui.button(win, text, x, y, w, h, fn() {
+        let current = gui.gettext(display)
+        gui.settext(display, current + text)
+    })
+}
+
+makebutton("1", 10, 60, 60, 40)
+makebutton("2", 80, 60, 60, 40)
+makebutton("3", 150, 60, 60, 40)
+makebutton("+", 220, 60, 60, 40)
+
+makebutton("4", 10, 110, 60, 40)
+makebutton("5", 80, 110, 60, 40)
+makebutton("6", 150, 110, 60, 40)
+makebutton("-", 220, 110, 60, 40)
+
+makebutton("7", 10, 160, 60, 40)
+makebutton("8", 80, 160, 60, 40)
+makebutton("9", 150, 160, 60, 40)
+makebutton("*", 220, 160, 60, 40)
+
+makebutton("0", 10, 210, 60, 40)
+makebutton(".", 80, 210, 60, 40)
+makebutton("=", 150, 210, 140, 40)
+
+gui.run()
