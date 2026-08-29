@@ -1,0 +1,7 @@
+try {
+    throw("something went wrong")
+} catch e {
+    print("caught error: " + e)
+} finally {
+    print("cleanup")
+  }
