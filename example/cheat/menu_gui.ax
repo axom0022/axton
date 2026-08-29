@@ -1,0 +1,56 @@
+import "gui"
+
+let win = gui.window("axton cheat menu", 400, 500)
+
+gui.label(win, "axton cheat menu", 10, 10)
+gui.label(win, "health: 100/100", 10, 40)
+gui.label(win, "ammo: 30", 10, 65)
+gui.label(win, "score: 0", 10, 90)
+gui.label(win, "speed: 1.0", 10, 115)
+gui.label(win, "jump: 1.0", 10, 140)
+
+gui.label(win, "────────────────", 10, 160)
+
+let godmodebtn = gui.button(win, "godmode [ ]", 10, 175, 180, 25, fn() {
+    gui.settext(godmodebtn, "godmode [x]")
+})
+
+let ammobtn = gui.button(win, "infinite ammo [ ]", 10, 205, 180, 25, fn() {
+    gui.settext(ammobtn, "infinite ammo [x]")
+})
+
+let noclipbtn = gui.button(win, "noclip [ ]", 10, 235, 180, 25, fn() {
+    gui.settext(noclipbtn, "noclip [x]")
+})
+
+let wallhackbtn = gui.button(win, "wallhack [ ]", 10, 265, 180, 25, fn() {
+    gui.settext(wallhackbtn, "wallhack [x]")
+})
+
+let aimbotbtn = gui.button(win, "aimbot [ ]", 10, 295, 180, 25, fn() {
+    gui.settext(aimbotbtn, "aimbot [x]")
+})
+
+gui.label(win, "speed hack: 1.0x", 10, 330)
+
+let speedbar = gui.progress(win, 10, 350, 200, 10)
+
+gui.label(win, "nearby players:", 10, 380)
+gui.label(win, "  player1 - 100m", 20, 400)
+gui.label(win, "  player2 - 50m", 20, 420)
+gui.label(win, "  player3 - 200m", 20, 440)
+gui.label(win, "  player4 - 75m", 20, 460)
+
+let applybtn = gui.button(win, "apply", 10, 485, 100, 25, fn() {
+    gui.messagebox("info", "cheats applied")
+})
+
+let resetbtn = gui.button(win, "reset", 120, 485, 100, 25, fn() {
+    gui.messagebox("info", "cheats reset")
+})
+
+let hidebtn = gui.button(win, "hide", 230, 485, 100, 25, fn() {
+    gui.hide(win)
+})
+
+gui.run()
