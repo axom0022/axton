@@ -1,0 +1,167 @@
+let grid = [
+    [0,0,0,0],
+    [0,0,0,0],
+    [0,0,0,0],
+    [0,0,0,0]
+]
+
+let addrandom = fn() {
+    let empty = []
+    for i in range(4) {
+        for j in range(4) {
+            if grid[i][j] == 0 {
+                empty.append([i, j])
+            }
+        }
+    }
+    if len(empty) > 0 {
+        let pos = empty[int(rand() * len(empty))]
+        grid[pos[0]][pos[1]] = if rand() < 0.9 then 2 else 4
+    }
+}
+
+let slide = fn(row) {
+    let newrow = []
+    for i in row {
+        if i != 0 {
+            newrow.append(i)
+        }
+    }
+    while len(newrow) < 4 {
+        newrow.append(0)
+    }
+    for i in range(3) {
+        if newrow[i] == newrow[i+1] and newrow[i] != 0 {
+            newrow[i] = newrow[i] * 2
+            newrow[i+1] = 0
+        }
+    }
+    let result = []
+    for i in newrow {
+        if i != 0 {
+            result.append(i)
+        }
+    }
+    while len(result) < 4 {
+        result.append(0)
+    }
+    return result
+}
+
+let moveleft = fn() {
+    for i in range(4) {
+        grid[i] = slide(grid[i])
+    }
+}
+
+let moveright = fn() {
+    for i in range(4) {
+        let row = grid[i]
+        let reversed = [row[3], row[2], row[1], row[0]]
+        let slided = slide(reversed)
+        grid[i] = [slided[3], slided[2], slided[1], slided[0]]
+    }
+}
+
+let moveup = fn() {
+    for j in range(4) {
+        let col = [grid[0][j], grid[1][j], grid[2][j], grid[3][j]]
+        let slided = slide(col)
+        for i in range(4) {
+            grid[i][j] = slided[i]
+        }
+    }
+}
+
+let movedown = fn() {
+    for j in range(4) {
+        let col = [grid[3][j], grid[2][j], grid[1][j], grid[0][j]]
+        let slided = slide(col)
+        for i in range(4) {
+            grid[3-i][j] = slided[i]
+        }
+    }
+}
+
+let draw = fn() {
+    print("")
+    print("+----+----+----+----+")
+    for i in range(4) {
+        let line = "|"
+        for j in range(4) {
+            let val = grid[i][j]
+            if val == 0 {
+                line = line + "    "
+            } else {
+                let strval = str(val)
+                while len(strval) < 4 {
+                    strval = " " + strval
+                }
+                line = line + strval
+            }
+            line = line + "|"
+        }
+        print(line)
+        print("+----+----+----+----+")
+    }
+}
+
+let checkwin = fn() {
+    for i in range(4) {
+        for j in range(4) {
+            if grid[i][j] == 2048 {
+                return true
+            }
+        }
+    }
+    return false
+}
+
+let checklose = fn() {
+    for i in range(4) {
+        for j in range(4) {
+            if grid[i][j] == 0 {
+                return false
+            }
+        }
+    }
+    for i in range(4) {
+        for j in range(3) {
+            if grid[i][j] == grid[i][j+1] {
+                return false
+            }
+        }
+    }
+    for i in range(3) {
+        for j in range(4) {
+            if grid[i][j] == grid[i+1][j] {
+                return false
+            }
+        }
+    }
+    return true
+}
+
+addrandom()
+addrandom()
+
+while true {
+    draw()
+    let cmd = input("> ")
+    if cmd == "w" { moveup() }
+    elif cmd == "s" { movedown() }
+    elif cmd == "a" { moveleft() }
+    elif cmd == "d" { moveright() }
+    elif cmd == "q" { break }
+    if checkwin() {
+        draw()
+        print("you win!")
+        break
+    }
+    addrandom()
+    if checklose() {
+        draw()
+        print("game over!")
+        break
+    }
+}
