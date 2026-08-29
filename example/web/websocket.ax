@@ -1,0 +1,20 @@
+import "websocket"
+
+let ws = websocket.create(8081)
+
+ws.onconnection(fn(socket) {
+    print("new client connected")
+    websocket.send(socket, "welcome")
+})
+
+ws.onmessage(fn(socket, msg) {
+    print("received: " + msg)
+    websocket.broadcast(msg)
+})
+
+ws.onclose(fn(socket) {
+    print("client disconnected")
+})
+
+ws.start()
+print("websocket server running on port 8081")
