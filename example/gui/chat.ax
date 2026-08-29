@@ -1,0 +1,21 @@
+import "gui"
+import "websocket"
+
+let win = gui.window("chat client", 500, 600)
+
+let messages = gui.listbox(win, 10, 10, 480, 400, fn() {})
+
+let input = gui.textbox(win, 10, 420, 380, fn() {})
+
+let sendbtn = gui.button(win, "send", 400, 420, 80, 30, fn() {
+    let text = gui.gettext(input)
+    if text != "" {
+        gui.appenditem(messages, "you: " + text)
+        gui.settext(input, "")
+    }
+})
+
+let connectbtn = gui.button(win, "connect", 400, 460, 80, 30, fn() {
+})
+
+gui.run()
