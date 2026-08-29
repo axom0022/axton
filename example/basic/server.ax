@@ -1,0 +1,26 @@
+import "http"
+
+http.createserver(8080)
+
+http.get("/", fn(req) {
+    return http.html("<h1>hello world</h1><p>axton web server</p>")
+})
+
+http.get("/api/users", fn(req) {
+    let users = [{"name": "alice", "age": 25}, {"name": "bob", "age": 30}]
+    return http.json(users)
+})
+
+http.post("/api/users", fn(req) {
+    let data = req.json
+    print("created user: " + data.name)
+    return http.json({"status": "created", "name": data.name})
+})
+
+http.get("/api/time", fn(req) {
+    return http.json({"time": time()})
+})
+
+http.static("./static")
+http.start()
+print("server running on port 8080")
