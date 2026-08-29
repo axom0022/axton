@@ -1,0 +1,87 @@
+import "overlay"
+
+let win = overlay.create(400, 500, 100, 100)
+overlay.settitle(win, "cheat overlay")
+overlay.setsize(win, 400, 500)
+overlay.setposition(win, 100, 100)
+
+let colors = {
+    bg: [0.1, 0.1, 0.15],
+    fg: [0.9, 0.9, 0.9],
+    accent: [0.2, 0.8, 0.9],
+    red: [0.9, 0.2, 0.2],
+    green: [0.2, 0.9, 0.2]
+}
+
+let drawmenu = fn() {
+    overlay.begin(win)
+
+    overlay.drawrect(win, 0, 0, 400, 500, colors.bg[0], colors.bg[1], colors.bg[2], 1)
+    overlay.drawrect(win, 0, 0, 400, 30, colors.accent[0], colors.accent[1], colors.accent[2], 1)
+    overlay.drawtext(win, 10, 8, "axton cheat", colors.fg[0], colors.fg[1], colors.fg[2], 16)
+
+    let y = 40
+    overlay.drawtext(win, 10, y, "health: 100/100", colors.fg[0], colors.fg[1], colors.fg[2], 14)
+    y = y + 25
+    overlay.drawtext(win, 10, y, "ammo: 30", colors.fg[0], colors.fg[1], colors.fg[2], 14)
+    y = y + 25
+    overlay.drawtext(win, 10, y, "score: 0", colors.fg[0], colors.fg[1], colors.fg[2], 14)
+    y = y + 25
+    overlay.drawtext(win, 10, y, "speed: 1.0", colors.fg[0], colors.fg[1], colors.fg[2], 14)
+    y = y + 25
+    overlay.drawtext(win, 10, y, "jump: 1.0", colors.fg[0], colors.fg[1], colors.fg[2], 14)
+
+    y = y + 35
+    overlay.drawrect(win, 10, y, 180, 25, colors.accent[0] * 0.3, colors.accent[1] * 0.3, colors.accent[2] * 0.3, 1)
+    overlay.drawtext(win, 15, y + 5, "godmode [ ]", colors.fg[0], colors.fg[1], colors.fg[2], 13)
+
+    y = y + 30
+    overlay.drawrect(win, 10, y, 180, 25, colors.accent[0] * 0.3, colors.accent[1] * 0.3, colors.accent[2] * 0.3, 1)
+    overlay.drawtext(win, 15, y + 5, "infinite ammo [ ]", colors.fg[0], colors.fg[1], colors.fg[2], 13)
+
+    y = y + 30
+    overlay.drawrect(win, 10, y, 180, 25, colors.accent[0] * 0.3, colors.accent[1] * 0.3, colors.accent[2] * 0.3, 1)
+    overlay.drawtext(win, 15, y + 5, "noclip [ ]", colors.fg[0], colors.fg[1], colors.fg[2], 13)
+
+    y = y + 30
+    overlay.drawrect(win, 10, y, 180, 25, colors.accent[0] * 0.3, colors.accent[1] * 0.3, colors.accent[2] * 0.3, 1)
+    overlay.drawtext(win, 15, y + 5, "wallhack [ ]", colors.fg[0], colors.fg[1], colors.fg[2], 13)
+
+    y = y + 30
+    overlay.drawrect(win, 10, y, 180, 25, colors.accent[0] * 0.3, colors.accent[1] * 0.3, colors.accent[2] * 0.3, 1)
+    overlay.drawtext(win, 15, y + 5, "aimbot [ ]", colors.fg[0], colors.fg[1], colors.fg[2], 13)
+
+    y = y + 40
+    overlay.drawtext(win, 10, y, "speed hack: 1.0x", colors.fg[0], colors.fg[1], colors.fg[2], 13)
+    y = y + 20
+    overlay.drawrect(win, 10, y, 200, 10, 0.2, 0.2, 0.2, 1)
+    overlay.drawrect(win, 10, y, 100, 10, colors.accent[0], colors.accent[1], colors.accent[2], 1)
+
+    y = y + 25
+    overlay.drawtext(win, 10, y, "nearby players:", colors.fg[0], colors.fg[1], colors.fg[2], 12)
+    y = y + 18
+    overlay.drawtext(win, 20, y, "player1 - 100m", colors.fg[0], colors.fg[1], colors.fg[2], 11)
+    y = y + 16
+    overlay.drawtext(win, 20, y, "player2 - 50m", colors.fg[0], colors.fg[1], colors.fg[2], 11)
+    y = y + 16
+    overlay.drawtext(win, 20, y, "player3 - 200m", colors.fg[0], colors.fg[1], colors.fg[2], 11)
+    y = y + 16
+    overlay.drawtext(win, 20, y, "player4 - 75m", colors.fg[0], colors.fg[1], colors.fg[2], 11)
+
+    y = y + 35
+    overlay.drawrect(win, 10, y, 100, 25, 0.2, 0.6, 0.2, 1)
+    overlay.drawtext(win, 30, y + 5, "apply", colors.fg[0], colors.fg[1], colors.fg[2], 12)
+
+    overlay.drawrect(win, 120, y, 100, 25, 0.6, 0.2, 0.2, 1)
+    overlay.drawtext(win, 140, y + 5, "reset", colors.fg[0], colors.fg[1], colors.fg[2], 12)
+
+    overlay.drawrect(win, 230, y, 100, 25, 0.4, 0.4, 0.4, 1)
+    overlay.drawtext(win, 245, y + 5, "hide", colors.fg[0], colors.fg[1], colors.fg[2], 12)
+
+    overlay.end(win)
+}
+
+while true {
+    drawmenu()
+    sleep(0.016)
+}
