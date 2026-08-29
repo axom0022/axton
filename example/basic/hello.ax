@@ -1,0 +1,3 @@
+print("hello from axton")
+let name = "world"
+print("hello " + name)
