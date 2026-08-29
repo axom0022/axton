@@ -1,0 +1,34 @@
+import "gui"
+
+let win = gui.window("todo list", 400, 500)
+
+let input = gui.textbox(win, 10, 10, 300, fn() {})
+
+let addbtn = gui.button(win, "add", 320, 10, 60, 30, fn() {
+    let text = gui.gettext(input)
+    if text != "" {
+        gui.appenditem(listbox, text)
+        gui.settext(input, "")
+    }
+})
+
+let listbox = gui.listbox(win, 10, 50, 300, 300, fn(selected) {
+    print("selected: " + selected)
+})
+
+let removebtn = gui.button(win, "remove", 10, 360, 100, 30, fn() {
+    let selected = gui.getselected(listbox)
+    if selected != "" {
+        gui.removeitem(listbox, selected)
+    }
+})
+
+let clearbtn = gui.button(win, "clear all", 120, 360, 100, 30, fn() {
+    gui.clearitems(listbox)
+})
+
+let exitbtn = gui.button(win, "exit", 230, 360, 100, 30, fn() {
+    guiexit()
+})
+
+gui.run()
