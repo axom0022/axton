@@ -1,0 +1,11 @@
+let score = 85
+
+if score >= 90 {
+    print("grade a")
+} elif score >= 80 {
+    print("grade b")
+} elif score >= 70 {
+    print("grade c")
+} else {
+    print("grade d")
+}
