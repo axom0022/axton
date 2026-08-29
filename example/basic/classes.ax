@@ -1,0 +1,19 @@
+let person = class {
+    let init = fn(name, age) {
+        let this.name = name
+        let this.age = age
+    }
+    
+    let greet = fn() {
+        print("hello " + this.name + " age " + str(this.age))
+    }
+    
+    let birthday = fn() {
+        this.age = this.age + 1
+    }
+}
+
+let alice = person("alice", 25)
+alice.greet()
+alice.birthday()
+alice.greet()
