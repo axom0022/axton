@@ -1,0 +1,162 @@
+let pieces = [
+    [[1,1,1,1]],
+    [[1,1],[1,1]],
+    [[0,1,0],[1,1,1]],
+    [[1,0,0],[1,1,1]],
+    [[0,0,1],[1,1,1]],
+    [[0,1,1],[1,1,0]],
+    [[1,1,0],[0,1,1]]
+]
+
+let grid = []
+for i in range(20) {
+    let row = []
+    for j in range(10) {
+        row.append(0)
+    }
+    grid.append(row)
+}
+
+let curpiece = 0
+let curx = 3
+let cury = 0
+let currot = 0
+
+let getpiece = fn() {
+    let p = pieces[curpiece]
+    let r = p
+    for i in range(currot) {
+        let newr = []
+        for j in range(len(r[0])) {
+            let row = []
+            for k in range(len(r)) {
+                row.append(r[len(r)-1-k][j])
+            }
+            newr.append(row)
+        }
+        r = newr
+    }
+    return r
+}
+
+let checkcollision = fn(x, y, piece) {
+    for i in range(len(piece)) {
+        for j in range(len(piece[i])) {
+            if piece[i][j] != 0 {
+                let px = x + j
+                let py = y + i
+                if px < 0 or px >= 10 or py >= 20 {
+                    return true
+                }
+                if py >= 0 and grid[py][px] != 0 {
+                    return true
+                }
+            }
+        }
+    }
+    return false
+}
+
+let mergepiece = fn() {
+    let piece = getpiece()
+    for i in range(len(piece)) {
+        for j in range(len(piece[i])) {
+            if piece[i][j] != 0 {
+                grid[cury+i][curx+j] = curpiece + 1
+            }
+        }
+    }
+}
+
+let clearfull = fn() {
+    let cleared = 0
+    let i = 19
+    while i >= 0 {
+        let full = true
+        for j in range(10) {
+            if grid[i][j] == 0 {
+                full = false
+            }
+        }
+        if full {
+            for k in range(i, 0, -1) {
+                grid[k] = grid[k-1]
+            }
+            grid[0] = [0,0,0,0,0,0,0,0,0,0]
+            cleared = cleared + 1
+        } else {
+            i = i - 1
+        }
+    }
+    return cleared
+}
+
+let newpiece = fn() {
+    curpiece = int(rand() * len(pieces))
+    curx = 3
+    cury = 0
+    currot = 0
+    if checkcollision(curx, cury, getpiece()) {
+        return false
+    }
+    return true
+}
+
+let draw = fn() {
+    print("")
+    print("+----------+")
+    for i in range(20) {
+        let line = "|"
+        for j in range(10) {
+            if grid[i][j] != 0 {
+                line = line + "#"
+            } else {
+                line = line + "."
+            }
+        }
+        line = line + "|"
+        print(line)
+    }
+    print("+----------+")
+}
+
+let step = fn() {
+    if not checkcollision(curx, cury+1, getpiece()) {
+        cury = cury + 1
+        return true
+    }
+    mergepiece()
+    clearfull()
+    return newpiece()
+}
+
+newpiece()
+while true {
+    draw()
+    let cmd = input("> ")
+    if cmd == "a" {
+        if not checkcollision(curx-1, cury, getpiece()) {
+            curx = curx - 1
+        }
+    } elif cmd == "d" {
+        if not checkcollision(curx+1, cury, getpiece()) {
+            curx = curx + 1
+        }
+    } elif cmd == "s" {
+        while not checkcollision(curx, cury+1, getpiece()) {
+            cury = cury + 1
+        }
+        mergepiece()
+        clearfull()
+        if not newpiece() {
+            break
+        }
+    } elif cmd == "q" {
+        break
+    }
+    if not step() {
+        draw()
+        print("game over!")
+        break
+    }
+}
