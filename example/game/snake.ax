@@ -1,0 +1,69 @@
+let grid = 20
+let size = 20
+let snake = [[10, 10]]
+let dir = [1, 0]
+let food = [15, 15]
+
+let randompos = fn() {
+    return [int(rand() * grid), int(rand() * grid)]
+}
+
+let draw = fn() {
+    print("")
+    for y in range(grid) {
+        let line = ""
+        for x in range(grid) {
+            let ishead = snake[0][0] == x and snake[0][1] == y
+            let isbody = false
+            for i in range(1, len(snake)) {
+                if snake[i][0] == x and snake[i][1] == y {
+                    isbody = true
+                }
+            }
+            let isfood = food[0] == x and food[1] == y
+            if ishead { line = line + "O" }
+            elif isbody { line = line + "o" }
+            elif isfood { line = line + "*" }
+            else { line = line + "." }
+        }
+        print(line)
+    }
+    print("score: " + str(len(snake)))
+}
+
+let step = fn() {
+    let head = snake[0]
+    let newhead = [head[0] + dir[0], head[1] + dir[1]]
+    if newhead[0] < 0 or newhead[0] >= grid or newhead[1] < 0 or newhead[1] >= grid {
+        return false
+    }
+    for i in snake {
+        if i[0] == newhead[0] and i[1] == newhead[1] {
+            return false
+        }
+    }
+    snake.insert(0, newhead)
+    if newhead[0] == food[0] and newhead[1] == food[1] {
+        food = randompos()
+    } else {
+        snake.pop()
+    }
+    return true
+}
+
+let input = fn() {
+    let cmd = input("> ")
+    if cmd == "w" { dir = [0, -1] }
+    elif cmd == "s" { dir = [0, 1] }
+    elif cmd == "a" { dir = [-1, 0] }
+    elif cmd == "d" { dir = [1, 0] }
+}
+
+while true {
+    draw()
+    input()
+    if not step() {
+        print("game over! score: " + str(len(snake)))
+        break
+    }
+}
