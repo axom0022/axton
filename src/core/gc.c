@@ -1,22 +1,33 @@
 #include "axton.h"
+#include <pthread.h>
 
-static object *roots = NULL;
-static object *allobjs = NULL;
-static int objcount = 0;
-static int threshold = 4096;
+static object *young = NULL;
+static object *old = NULL;
+static int youngcount = 0;
+static int oldcount = 0;
+static int youngthreshold = 1024;
+static int oldthreshold = 4096;
+static pthread_mutex_t gclock = PTHREAD_MUTEX_INITIALIZER;
 
 void gcinit(void) {
-    roots = NULL;
-    allobjs = NULL;
-    objcount = 0;
+    young = NULL;
+    old = NULL;
+    youngcount = 0;
+    oldcount = 0;
 }
 
 void gcaddroot(object *obj) {
     if (!obj) return;
-    obj->next = roots;
-    if (roots) roots->prev = obj;
-    roots = obj;
+    pthread_mutex_lock(&gclock);
+    obj->next = young;
+    if (young) young->prev = obj;
+    young = obj;
     obj->prev = NULL;
+    youngcount++;
+    if (youngcount > youngthreshold) {
+        gcrun();
+    }
+    pthread_mutex_unlock(&gclock);
 }
 
 void gcmark(object *obj) {
@@ -43,39 +54,31 @@ void gcmark(object *obj) {
             if (e->values[i]) gcmark(e->values[i]);
         }
     }
-    if (obj->type == 20 && obj->tensor.data) {
-        free(obj->tensor.data);
-    }
-    if (obj->type == 21 && obj->coroutine.func) {
-        gcmark(obj->coroutine.func);
-    }
 }
 
 static void markroots(void) {
-    object *obj = roots;
+    object *obj = young;
+    while (obj) {
+        gcmark(obj);
+        obj = obj->next;
+    }
+    obj = old;
     while (obj) {
         gcmark(obj);
         obj = obj->next;
     }
 }
 
-static void sweep(void) {
-    object *obj = allobjs;
+static void sweep(object **list, int *count) {
+    object *obj = *list;
     while (obj) {
         object *next = obj->next;
         if (!obj->marked) {
             if (obj->prev) obj->prev->next = obj->next;
             if (obj->next) obj->next->prev = obj->prev;
-            if (allobjs == obj) allobjs = obj->next;
-            if (obj->type == 2 && obj->sval) free(obj->sval);
-            if (obj->type == 5 && obj->list.items) free(obj->list.items);
-            if (obj->type == 6 && obj->dict.keys) free(obj->dict.keys);
-            if (obj->type == 6 && obj->dict.keyvals) free(obj->dict.keyvals);
-            if (obj->type == 6 && obj->dict.vals) free(obj->dict.vals);
-            if (obj->type == 7 && obj->func.params) free(obj->func.params);
-            if (obj->type == 20 && obj->tensor.data) free(obj->tensor.data);
+            if (*list == obj) *list = obj->next;
             free(obj);
-            objcount--;
+            (*count)--;
         } else {
             obj->marked = 0;
         }
@@ -84,18 +87,45 @@ static void sweep(void) {
 }
 
 void gcrun(void) {
+    pthread_mutex_lock(&gclock);
     markroots();
-    sweep();
+    sweep(&young, &youngcount);
+    object *obj = young;
+    while (obj) {
+        object *next = obj->next;
+        if (obj->marked) {
+            if (obj->prev) obj->prev->next = obj->next;
+            if (obj->next) obj->next->prev = obj->prev;
+            if (young == obj) young = obj->next;
+            youngcount--;
+            obj->next = old;
+            if (old) old->prev = obj;
+            old = obj;
+            obj->prev = NULL;
+            oldcount++;
+        }
+        obj = next;
+    }
+    if (oldcount > oldthreshold) {
+        markroots();
+        sweep(&old, &oldcount);
+    }
+    pthread_mutex_unlock(&gclock);
 }
 
 object *gcalloc(int size) {
     object *obj = calloc(1, size);
     obj->marked = 0;
-    obj->next = allobjs;
+    obj->refcount = 0;
+    obj->file = NULL;
+    obj->line = 0;
+    obj->next = young;
+    if (young) young->prev = obj;
+    young = obj;
     obj->prev = NULL;
-    if (allobjs) allobjs->prev = obj;
-    allobjs = obj;
-    objcount++;
-    if (objcount > threshold) gcrun();
+    youngcount++;
+    if (youngcount > youngthreshold) {
+        gcrun();
+    }
     return obj;
 }
