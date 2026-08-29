@@ -1,0 +1,43 @@
+import "engine3d"
+import "input"
+
+e3d.init(1280, 720)
+
+let scene = e3d.createscene()
+
+let cam = e3d.camcreate(70, 1280/720, 0.1, 100)
+e3d.camsetposition(cam, 0, 0, 0)
+e3d.setcamera(scene, cam)
+
+let mesh = e3d.meshcreate()
+let verts = [-0.5,-0.5,0, 0.5,-0.5,0, 0,0.5,0]
+let inds = [0,1,2]
+e3d.meshsetvertices(mesh, verts)
+e3d.meshsetindices(mesh, inds)
+
+let mat = e3d.matcreate()
+e3d.matsetdiffuse(mat, 1, 0, 0)
+
+let trans = e3d.transcreate()
+e3d.addmesh(scene, mesh, trans, mat)
+
+let light = e3d.lightcreate(0)
+e3d.lightsetpos(light, 5, 10, 5)
+e3d.addlight(scene, light)
+
+e3d.setbackground(0.1, 0.1, 0.2)
+
+let speed = 0.05
+let pos = [0, 0, -5]
+
+input.init()
+
+while true {
+    input.update()
+    if input.key(87) { pos[2] = pos[2] + speed } // w
+    if input.key(83) { pos[2] = pos[2] - speed } // s
+    if input.key(65) { pos[0] = pos[0] - speed } // a
+    if input.key(68) { pos[0] = pos[0] + speed } // d
+    e3d.camsetposition(cam, pos[0], pos[1], pos[2])
+    e3d.renderframe(scene)
+}
