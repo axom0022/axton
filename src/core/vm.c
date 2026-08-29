@@ -1,97 +1,109 @@
-#include "vm.h"
-#include <stdlib.h>
+#include "axton.h"
+#include "bytecode.h"
+#include <pthread.h>
+#include <string.h>
 
-typedef struct vmframe {
+typedef struct vmthread {
+    unsigned char *ip;
     object **stack;
     int stacksize;
     int stackcap;
-    unsigned char *ip;
     environment *env;
     object **locals;
     int localcount;
-    struct vmframe *prev;
-} vmframe;
+    struct vmthread *next;
+} vmthread;
 
-static vmframe *curframe = NULL;
-static bytecode *curbc = NULL;
+static vmthread *threads = NULL;
+static int threadcount = 0;
+static pthread_mutex_t vmlock = PTHREAD_MUTEX_INITIALIZER;
 
-static void push(object *o) {
-    if (curframe->stacksize >= curframe->stackcap) {
-        curframe->stackcap *= 2;
-        curframe->stack = realloc(curframe->stack, curframe->stackcap * sizeof(object*));
+static void push(vmthread *t, object *o) {
+    if (t->stacksize >= t->stackcap) {
+        t->stackcap *= 2;
+        t->stack = realloc(t->stack, t->stackcap * sizeof(object*));
     }
-    curframe->stack[curframe->stacksize++] = o;
+    t->stack[t->stacksize++] = o;
 }
 
-static object *pop(void) {
-    if (curframe->stacksize == 0) return makenone();
-    return curframe->stack[--curframe->stacksize];
+static object *pop(vmthread *t) {
+    if (t->stacksize == 0) return makenone();
+    return t->stack[--t->stacksize];
 }
 
-object *executebytecode(bytecode *bc, environment *env) {
-    curbc = bc;
-    vmframe frame;
-    frame.stackcap = 256;
-    frame.stacksize = 0;
-    frame.stack = malloc(frame.stackcap * sizeof(object*));
-    frame.ip = bc->code;
-    frame.env = env;
-    frame.localcount = bc->namecount;
-    frame.locals = calloc(frame.localcount, sizeof(object*));
-    frame.prev = NULL;
-    curframe = &frame;
-
+static object *executethread(vmthread *t) {
+    bytecode *bc = (bytecode*)t->ip;
     while (1) {
-        unsigned char op = *frame.ip++;
+        unsigned char op = *t->ip++;
         int idx;
         switch (op) {
             case oploadconst:
-                idx = (frame.ip[0] << 24) | (frame.ip[1] << 16) | (frame.ip[2] << 8) | frame.ip[3];
-                frame.ip += 4;
-                push(bc->constants[idx]);
+                idx = (t->ip[0] << 24) | (t->ip[1] << 16) | (t->ip[2] << 8) | t->ip[3];
+                t->ip += 4;
+                push(t, bc->constants[idx]);
                 break;
             case oploadvar:
-                idx = (frame.ip[0] << 24) | (frame.ip[1] << 16) | (frame.ip[2] << 8) | frame.ip[3];
-                frame.ip += 4;
-                push(frame.locals[idx]);
+                idx = (t->ip[0] << 24) | (t->ip[1] << 16) | (t->ip[2] << 8) | t->ip[3];
+                t->ip += 4;
+                push(t, t->locals[idx]);
                 break;
             case opstorevar:
-                idx = (frame.ip[0] << 24) | (frame.ip[1] << 16) | (frame.ip[2] << 8) | frame.ip[3];
-                frame.ip += 4;
-                frame.locals[idx] = pop();
+                idx = (t->ip[0] << 24) | (t->ip[1] << 16) | (t->ip[2] << 8) | t->ip[3];
+                t->ip += 4;
+                t->locals[idx] = pop(t);
                 break;
             case opadd: {
-                object *right = pop();
-                object *left = pop();
-                push(addvalues(left, right));
+                object *right = pop(t);
+                object *left = pop(t);
+                push(t, addvalues(left, right));
                 break;
             }
             case opsub: {
-                object *right = pop();
-                object *left = pop();
-                push(subvalues(left, right));
+                object *right = pop(t);
+                object *left = pop(t);
+                push(t, subvalues(left, right));
                 break;
             }
             case opmul: {
-                object *right = pop();
-                object *left = pop();
-                push(mulvalues(left, right));
+                object *right = pop(t);
+                object *left = pop(t);
+                push(t, mulvalues(left, right));
                 break;
             }
             case opdiv: {
-                object *right = pop();
-                object *left = pop();
-                push(divvalues(left, right));
+                object *right = pop(t);
+                object *left = pop(t);
+                push(t, divvalues(left, right));
                 break;
             }
             case oppop:
-                pop();
+                pop(t);
                 break;
             case opreturn: {
-                object *result = pop();
-                free(frame.stack);
-                free(frame.locals);
+                object *result = pop(t);
+                free(t->stack);
+                free(t->locals);
+                pthread_mutex_lock(&vmlock);
+                vmthread *prev = NULL, *cur = threads;
+                while (cur && cur != t) { prev = cur; cur = cur->next; }
+                if (cur) { if (prev) prev->next = cur->next; else threads = cur->next; }
+                threadcount--;
+                pthread_mutex_unlock(&vmlock);
+                free(t);
                 return result;
+            }
+            case opjump: {
+                int offset = (t->ip[0] << 24) | (t->ip[1] << 16) | (t->ip[2] << 8) | t->ip[3];
+                t->ip += 4;
+                t->ip += offset;
+                break;
+            }
+            case opjumpiffalse: {
+                object *cond = pop(t);
+                int offset = (t->ip[0] << 24) | (t->ip[1] << 16) | (t->ip[2] << 8) | t->ip[3];
+                t->ip += 4;
+                if (!istruthy(cond)) t->ip += offset;
+                break;
             }
             default:
                 throwexception("unknown opcode");
@@ -99,4 +111,32 @@ object *executebytecode(bytecode *bc, environment *env) {
         }
     }
     return makenone();
+}
+
+static void *threadrunner(void *arg) {
+    vmthread *t = (vmthread*)arg;
+    object *result = executethread(t);
+    return result;
+}
+
+object *executebytecode(bytecode *bc, environment *env) {
+    vmthread *t = malloc(sizeof(vmthread));
+    t->ip = bc->code;
+    t->stackcap = 256;
+    t->stacksize = 0;
+    t->stack = malloc(t->stackcap * sizeof(object*));
+    t->env = env;
+    t->localcount = bc->namecount;
+    t->locals = calloc(t->localcount, sizeof(object*));
+    t->next = NULL;
+    pthread_mutex_lock(&vmlock);
+    t->next = threads;
+    threads = t;
+    threadcount++;
+    pthread_mutex_unlock(&vmlock);
+    pthread_t tid;
+    pthread_create(&tid, NULL, threadrunner, t);
+    void *result;
+    pthread_join(tid, &result);
+    return (object*)result;
 }
