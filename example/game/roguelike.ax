@@ -1,0 +1,96 @@
+let width = 40
+let height = 20
+let map = []
+let playerx = 20
+let playery = 10
+let monsters = []
+let score = 0
+
+for i in range(height) {
+    let row = []
+    for j in range(width) {
+        if i == 0 or i == height-1 or j == 0 or j == width-1 {
+            row.append("#")
+        } elif rand() < 0.1 {
+            row.append(".")
+        } else {
+            row.append(".")
+        }
+    }
+    map.append(row)
+}
+
+let draw = fn() {
+    print("")
+    for i in range(height) {
+        let line = ""
+        for j in range(width) {
+            if i == playery and j == playerx {
+                line = line + "@"
+            } else {
+                let ismonster = false
+                for m in monsters {
+                    if m[0] == j and m[1] == i {
+                        line = line + "M"
+                        ismonster = true
+                    }
+                }
+                if not ismonster {
+                    line = line + map[i][j]
+                }
+            }
+        }
+        print(line)
+    }
+    print("score: " + str(score))
+}
+
+let moveplayer = fn(dx, dy) {
+    let nx = playerx + dx
+    let ny = playery + dy
+    if map[ny][nx] != "#" {
+        playerx = nx
+        playery = ny
+        for i in range(len(monsters)) {
+            if monsters[i][0] == playerx and monsters[i][1] == playery {
+                monsters.remove(i)
+                score = score + 1
+                break
+            }
+        }
+    }
+}
+
+let step = fn() {
+    for i in range(len(monsters)) {
+        let dx = playerx - monsters[i][0]
+        let dy = playery - monsters[i][1]
+        if abs(dx) > abs(dy) {
+            if dx > 0 { monsters[i][0] = monsters[i][0] + 1 }
+            else { monsters[i][0] = monsters[i][0] - 1 }
+        } else {
+            if dy > 0 { monsters[i][1] = monsters[i][1] + 1 }
+            else { monsters[i][1] = monsters[i][1] - 1 }
+        }
+    }
+}
+
+for i in range(5) {
+    let m = [int(rand() * width), int(rand() * height)]
+    while map[m[1]][m[0]] == "#" {
+        m[0] = int(rand() * width)
+        m[1] = int(rand() * height)
+    }
+    monsters.append(m)
+}
+
+while true {
+    draw()
+    let cmd = input("> ")
+    if cmd == "w" { moveplayer(0, -1) }
+    elif cmd == "s" { moveplayer(0, 1) }
+    elif cmd == "a" { moveplayer(-1, 0) }
+    elif cmd == "d" { moveplayer(1, 0) }
+    elif cmd == "q" { break }
+    step()
+}
