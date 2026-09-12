@@ -30,30 +30,13 @@
 #include <signal.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
-#include <netdb.h>
-#define PATHSEP '/'
-#endif
-
-#ifndef __ANDROID__
 #include <netpacket/packet.h>
 #include <net/ethernet.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include <netinet/tcp.h>
-#endif
-
-#ifdef __ANDROID__
-#include <android/log.h>
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "axton", __VA_ARGS__)
-#else
-#define LOGI(...) printf(__VA_ARGS__)
-#endif
-
-#ifndef __ANDROID__
-#include <pcap.h>
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/hci.h>
-#include <bluetooth/hci_lib.h>
+#include <netdb.h>
+#define PATHSEP '/'
 #endif
 
 #include <openssl/ssl.h>
@@ -69,39 +52,13 @@
 #include <tesseract/capi.h>
 
 #include <ffi.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <GL/glx.h>
+#include <GL/glext.h>
+#include <GL/glxext.h>
 
-#ifndef __ANDROID__
-#include <vulkan/vulkan.h>
-#include <d3d12.h>
-#include <OpenCL/cl.h>
-#include <cuda.h>
-#include <webp/decode.h>
-#include <webp/encode.h>
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#include <libswscale/swscale.h>
-#include <libpostproc/postprocess.h>
-#include <portaudio.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_mixer.h>
-#include <assimp/assimp.h>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
-#include <bullet/btBulletDynamicsCommon.h>
-#include <bullet/btSoftBody.h>
-#include <bullet/btSoftBodyHelpers.h>
-#include <bullet/btSoftRigidDynamicsWorld.h>
-#include <openvr/openvr.h>
-#include <arpa/inet.h>
-#include <nghttp2/nghttp2.h>
-#include <h2o.h>
-#include <graphql/graphql.h>
-#include <mongoc/mongoc.h>
-#include <pgsql/libpq-fe.h>
-#include <mysql/mysql.h>
-#include <sqlite3.h>
-#endif
+#include <imgui.h>
 
 typedef enum {
     TOKEOF, TOKIDENT, TOKNUMBER, TOKSTRING, TOKINDENT, TOKDEDENT, TOKNEWLINE,
@@ -117,10 +74,7 @@ typedef enum {
     TOKASYNC, TOKAWAIT, TOKYIELD, TOKWITH, TOKAS, TOKGLOBAL,
     TOKNONLOCAL, TOKASSERT, TOKDECORATOR, TOKMATCH, TOKCASE,
     TOKPIPE, TOKTYPEHINT, TOKENUM, TOKDATACLASS,
-    TOKUNION, TOKOPTIONAL, TOKASYNCIO, TOKFSTRING,
-    TOKWALRUS, TOKTRIPLE, TOKRAW, TOKNULLSAFE,
-    TOKRESULT, TOKGENERIC, TOKMACRO, TOKJIT, TOKGPCU,
-    TOKSIMD, TOKVR, TOKAR, TOKXOM
+    TOKUNION, TOKOPTIONAL, TOKASYNCIO
 } toktype;
 
 typedef struct token {
@@ -135,20 +89,33 @@ typedef struct node {
     char *file;
 } node;
 
+typedef enum {
+    EXPR_BINARY, EXPR_UNARY, EXPR_IDENT, EXPR_NUMBER, EXPR_STRING,
+    EXPR_BOOL, EXPR_NONE, EXPR_CALL, EXPR_INDEX, EXPR_ATTR,
+    EXPR_LIST, EXPR_DICT
+} exprtype;
+
+typedef enum {
+    STMT_LET, STMT_RETURN, STMT_IF, STMT_WHILE, STMT_FOR,
+    STMT_BREAK, STMT_NEXT, STMT_FN, STMT_CLASS, STMT_EXPR,
+    STMT_TRY, STMT_THROW
+} stmttype;
+
 typedef struct expr {
     struct node node;
+    exprtype type;
     void *(*eval)(struct expr*, void*);
     char *typehint;
 } expr;
 
 typedef struct stmt {
     struct node node;
+    stmttype type;
     void *(*exec)(struct stmt*, void*);
 } stmt;
 
 typedef struct object {
     struct object *next;
-    struct object *prev;
     int marked;
     int refcount;
     int type;
@@ -289,7 +256,7 @@ typedef struct object {
             int size;
         } structobj;
         struct {
-            object *fn;
+            struct object *fn;
         } callback;
         struct {
             unsigned int program;
@@ -309,9 +276,9 @@ typedef struct object {
             float scale[3];
         } transform;
         struct {
-            object *mesh;
-            object *material;
-            object *transform;
+            struct object *mesh;
+            struct object *material;
+            struct object *transform;
         } renderable;
         struct {
             unsigned int framebuffer;
@@ -328,22 +295,22 @@ typedef struct object {
             int (*check)(void*);
         } typeguard;
         struct {
-            object *rules;
+            struct object *rules;
         } ratelimiter;
         struct {
-            object *patterns;
+            struct object *patterns;
         } validator;
         struct {
             unsigned char *data;
             int size;
         } hashcrack;
         struct {
-            object *targets;
+            struct object *targets;
             int state;
         } passwordbrute;
         struct {
             int fd;
-            object *clients;
+            struct object *clients;
         } mitmproxy;
         struct {
             int fd;
@@ -353,13 +320,13 @@ typedef struct object {
             int fd;
             char *host;
             int port;
-            object *credentials;
+            struct object *credentials;
         } sshbrute;
         struct {
-            object *session;
+            struct object *session;
         } scraper;
         struct {
-            object *sources;
+            struct object *sources;
         } osint;
         struct {
             void *engine;
@@ -428,280 +395,43 @@ typedef struct object {
             int running;
         } lsp;
         struct {
-            object *rules;
+            struct object *rules;
             int count;
         } linter;
         struct {
-            void *rt;
-            int x;
-            int y;
-            int z;
-            int w;
-        } ray;
-        struct {
-            void *world;
-            void *body;
-            void *joint;
-        } phys;
-        struct {
-            void *headset;
-            void *controllers;
-            int connected;
-        } vr;
-        struct {
-            void *agent;
-            void *env;
-            void *policy;
-        } rl;
-        struct {
-            void *model;
-            void *tokenizer;
-            int loaded;
-        } llm;
-        struct {
-            void *loop;
-            void *tasks;
-            int running;
-        } async;
-        struct {
-            void *fiber;
-            int state;
-        } fiber;
-        struct {
-            void *ch;
-            void *sendq;
-            void *recvq;
-        } channel;
-        struct {
-            void *sem;
-            int count;
-        } semaphore;
-        struct {
-            void *pool;
+            float *data;
             int size;
-            int active;
-        } threadpool;
+        } vector;
         struct {
-            void *stream;
-            void *context;
-            int connected;
-        } http3;
+            pthread_t thread;
+            struct object *func;
+            struct object *args;
+            int running;
+        } threadobj;
         struct {
-            void *sse;
-            void *clients;
-        } sse;
-        struct {
-            void *schema;
-            void *resolvers;
-        } graphql;
-        struct {
-            void *cipher;
-            void *key;
-            void *iv;
-        } cipher;
-        struct {
-            void *token;
-            void *header;
-            void *payload;
-            void *signature;
-        } jwttok;
-        struct {
-            void *client;
-            void *provider;
-            void *state;
-        } oauth;
-        struct {
-            void *bigint;
-            char *digits;
-            int sign;
-        } bigint;
-        struct {
-            double real;
-            double imag;
-        } complex;
-        struct {
-            char *digits;
-            int scale;
-            int precision;
-        } bigdec;
-        struct {
-            void *data;
-            int rows;
-            int cols;
-        } matrix;
-        struct {
-            void *df;
-            void *columns;
-            void *rows;
-        } dataframe;
-        struct {
-            void *expr;
-            void *vars;
-        } sym;
-        struct {
-            void *plot;
-            void *series;
-            void *axes;
-        } plot;
-        struct {
-            void *viz;
-            void *scene;
-            void *camera;
-        } viz3d;
-        struct {
-            void *gpu;
-            void *kernel;
-            void *buffer;
-        } gpuobj;
-        struct {
-            void *jit;
-            void *code;
-            void *func;
-        } jitobj;
-        struct {
-            void *sandbox;
-            void *perms;
-            int enabled;
-        } sandbox;
-        struct {
-            void *stack;
-            int depth;
-            void *frames;
-        } stacktrace;
-        struct {
-            void *plugin;
-            void *handle;
-            void *api;
-        } plugin;
-        struct {
-            void *vulkan;
-            void *device;
-            void *swapchain;
-        } vulkanobj;
-        struct {
-            void *d3d12;
-            void *device;
-            void *swapchain;
-        } d3d12obj;
-        struct {
-            void *anim;
-            void *bones;
-            void *clips;
-            void *state;
-        } animobj;
-        struct {
-            void *audio;
-            void *stream;
-            void *effects;
-        } audioobj;
-        struct {
-            void *net;
-            void *sockets;
-            void *protocol;
-        } netobj;
-        struct {
-            void *ecs;
-            void *entities;
-            void *systems;
-            void *components;
-        } ecsobj;
-        struct {
-            void *scene;
-            void *nodes;
-            void *transforms;
-            void *renderer;
-        } sceneobj;
-        struct {
-            void *asset;
-            void *loader;
-            void *cache;
-        } assetobj;
-        struct {
-            void *console;
-            void *platform;
-            void *sdk;
-        } consoleobj;
-        struct {
-            void *ws;
-            void *conns;
-            void *events;
-        } ws obj;
-        struct {
-            void *session;
-            void *store;
-            void *expiry;
-        } sessionobj;
-        struct {
-            void *frontend;
-            void *components;
-            void *state;
-        } frontendobj;
-        struct {
-            void *api;
-            void *routes;
-            void *middleware;
-        } apiframework;
-        struct {
-            void *rate;
-            void *limits;
-            void *buckets;
-        } ratelimit;
-        struct {
-            void *xom;
-            void *data;
-            void *dtype;
-        } xomobj;
-        struct {
-            void *sci;
-            void *special;
-            void *stats;
-        } sciobj;
-        struct {
-            void *xlearn;
-            void *models;
-            void *preprocessing;
-        } xlearnobj;
-        struct {
-            void *torch;
-            void *tensor;
-            void *module;
-            void *optim;
-        } torchobj;
-        struct {
-            void *flux;
-            void *graph;
-            void *session;
-            void *ops;
-        } fluxobj;
-        struct {
-            void *vision2;
-            void *image;
-            void *video;
-            void *features;
-        } vision2obj;
-        struct {
-            void *shield;
-            void *tokens;
-            void *validate;
-        } shieldobj;
-        struct {
-            void *clean;
-            void *filter;
-            void *sanitize;
-            void *escape;
-        } cleanobj;
+            FILE *file;
+            int fd;
+            int mode;
+        } fileobj;
     };
 } object;
 
+typedef struct envslot {
+    char *name;
+    object *value;
+    unsigned int hash;
+    int isconst;
+    int used;
+} envslot;
+
 typedef struct environment {
-    char **names;
-    object **values;
-    int *isconst;
-    char **typehints;
+    envslot *slots;
     int count;
     int cap;
     struct environment *parent;
     struct environment *globals;
+    struct environment *next;
+    int marked;
 } environment;
 
 typedef struct {
@@ -712,7 +442,6 @@ typedef struct {
     struct object *generator;
     char *file;
     int line;
-    struct object *stacktrace;
 } frame;
 
 typedef struct {
@@ -745,7 +474,6 @@ typedef struct {
     void (*deallocate)(void*);
     void *(*reallocate)(void*, int);
     int (*getpagesize)(void);
-#ifndef __ANDROID__
     int (*pcapopen)(const char*, char*);
     int (*pcapnext)(int, unsigned char**, int*);
     int (*pcapinject)(int, unsigned char*, int);
@@ -753,7 +481,6 @@ typedef struct {
     int (*bluetoothopen)(void);
     int (*bluetoothscan)(int, object*);
     void (*bluetoothclose)(int);
-#endif
     int (*processopen)(int, int);
     int (*processread)(int, long, unsigned char*, int);
     int (*processwrite)(int, long, unsigned char*, int);
@@ -767,14 +494,13 @@ typedef struct {
     int (*sslread)(void*, char*, int);
     void (*sslclose)(void*);
     void (*ssldestroy)(void*);
-#ifndef __ANDROID__
     int (*renderdocstart)(void);
     void (*renderdocend)(void);
     void (*imguiinit)(void*);
     void (*imguiupdate)(void*);
     void (*imguirender)(void*);
     void *(*gltfload)(const char*);
-    void (*physdebugdraw)(float*, int, int, int);
+    void (*physdebugdraw)(float*, int, int, int, int);
     void *(*audiomixcreate)(int);
     void (*audiomixadd)(void*, float*, int);
     void (*audiomixplay)(void*);
@@ -782,166 +508,6 @@ typedef struct {
     int (*videoload)(void*, const char*);
     int (*videoplay)(void*);
     int (*videoframe)(void*, unsigned char**);
-    void *(*raycreate)(void);
-    void (*rayrender)(void*, int, int);
-    void (*raysetlight)(void*, float, float, float, float);
-    void (*raysetmaterial)(void*, float, float, float, float);
-    void *(*physcreate)(void);
-    void (*physaddbody)(void*, float, float, float, float);
-    void (*physstep)(void*, float);
-    void (*physsetgravity)(void*, float, float, float);
-    void *(*vrcreate)(void);
-    int (*vrconnect)(void*);
-    void (*vrpoll)(void*);
-    void (*vrendrer)(void*);
-    void *(*rlcreate)(void);
-    void (*rltrain)(void*, int, int, float);
-    void *(*rlpredict)(void*, float*);
-    void *(*llmcreate)(void);
-    int (*llmload)(void*, const char*);
-    char *(*llmgenerate)(void*, const char*);
-    void *(*asynccreate)(void);
-    void (*asyncadd)(void*, void*);
-    int (*asyncrun)(void*);
-    void *(*fibercreate)(void);
-    void (*fiberswitch)(void*);
-    void *(*channelcreate)(int);
-    void (*channelsend)(void*, void*);
-    void *(*channelrecv)(void*);
-    void *(*semcreate)(int);
-    void (*semwait)(void*);
-    void (*sempost)(void*);
-    void *(*poolcreate)(int);
-    void (*poolsubmit)(void*, void*);
-    void (*poolwait)(void*);
-    void *(*http3create)(void);
-    int (*http3listen)(void*, int);
-    void (*http3serve)(void*);
-    void *(*ssecreate)(void);
-    void (*sseadd)(void*, const char*);
-    void (*ssesend)(void*, const char*);
-    void *(*graphqlcreate)(void);
-    void (*graphqladdquery)(void*, const char*, void*);
-    void (*graphqladdmutation)(void*, const char*, void*);
-    void *(*graphqlserve)(void*, int);
-    void *(*ciphercreate)(void);
-    void (*cipherencrypt)(void*, char*, int);
-    void (*cipherdecrypt)(void*, char*, int);
-    void *(*jwtcreate)(void);
-    char *(*jwtencode)(void*, char*);
-    void *(*jwtdecode)(void*, char*);
-    void *(*oauthcreate)(void);
-    char *(*oauthauthurl)(void*);
-    char *(*oauthgettoken)(void*, char*);
-    void *(*bigintcreate)(char*);
-    void *(*bigintadd)(void*, void*);
-    void *(*bigintmul)(void*, void*);
-    void *(*complexcreate)(double, double);
-    void *(*complexadd)(void*, void*);
-    void *(*complexmul)(void*, void*);
-    void *(*bigdeccreate)(char*, int);
-    void *(*bigdecadd)(void*, void*);
-    void *(*bigdecmul)(void*, void*);
-    void *(*matrixcreate)(int, int);
-    void (*matrixset)(void*, int, int, double);
-    void *(*matrixmul)(void*, void*);
-    void *(*dataframecreate)(void);
-    void (*dataframeload)(void*, char*);
-    void *(*dataframefilter)(void*, void*);
-    void *(*symcreate)(char*);
-    void *(*symdiff)(void*, char*);
-    void *(*symintegrate)(void*, char*);
-    void *(*plotcreate)(void);
-    void (*plotline)(void*, float*, float*, int);
-    void (*plotscatter)(void*, float*, float*, int);
-    void (*plotsave)(void*, char*);
-    void *(*viz3dcreate)(void);
-    void (*viz3dadd)(void*, float*, float*, float*, int);
-    void (*viz3drender)(void*);
-    void *(*gpucreate)(void);
-    void *(*gpukernel)(void*, char*);
-    void (*gpurun)(void*, void*, int);
-    void *(*jitcreate)(void);
-    void *(*jitcompile)(void*, char*);
-    void *(*jitexec)(void*, void**);
-    void *(*sandboxcreate)(void);
-    void (*sandboxsetperm)(void*, char*, int);
-    void *(*sandboxrun)(void*, void*);
-    void *(*stacktracecreate)(void);
-    void (*stacktraceadd)(void*, char*, int);
-    void *(*stacktraceget)(void*);
-    void *(*plugincreate)(void);
-    int (*pluginload)(void*, char*);
-    void *(*plugincall)(void*, char*, void*);
-    void *(*vulkancreate)(void);
-    void (*vulkanrender)(void*);
-    void *(*d3d12create)(void);
-    void (*d3d12render)(void*);
-    void *(*animcreate)(void);
-    void (*animaddbone)(void*, char*, int);
-    void (*animaddkeyframe)(void*, int, float, float*, float*, float*);
-    void (*animplay)(void*, char*, float);
-    void (*animupdate)(void*, float);
-    void *(*audiocreate)(void);
-    void (*audioload)(void*, char*);
-    void (*audioplay)(void*);
-    void (*audiostop)(void*);
-    void *(*netcreate)(void);
-    void (*netlisten)(void*, int);
-    void (*netsend)(void*, char*, int);
-    void *(*netrecv)(void*);
-    void *(*ecscreate)(void);
-    void (*ecsaddentity)(void*, void*);
-    void (*ecsaddcomponent)(void*, void*, int, void*);
-    void (*ecssystem)(void*, int, void*);
-    void (*ecsupdate)(void*, float);
-    void *(*scenecreate)(void);
-    void (*sceneaddnode)(void*, void*);
-    void (*scenerender)(void*);
-    void *(*assetcreate)(void);
-    void (*assetload)(void*, char*);
-    void *(*assetget)(void*, char*);
-    void *(*consolecreate)(void*, char*);
-    int (*consoleconnect)(void*);
-    void (*consoledeploy)(void*);
-    void *(*wscreate)(void);
-    void (*wsadd)(void*, int, void*);
-    void (*wssend)(void*, int, char*);
-    void *(*sessioncreate)(void);
-    void (*sessionset)(void*, char*, void*);
-    void *(*sessionget)(void*, char*);
-    void *(*frontendcreate)(void);
-    void (*frontendadd)(void*, char*, void*);
-    void (*frontendrender)(void*);
-    void *(*apicreate)(void);
-    void (*apiaddroute)(void*, char*, char*, void*);
-    void (*apistart)(void*, int);
-    void *(*ratelimitcreate)(int, int);
-    int (*ratelimitcheck)(void*, char*);
-    void *(*xomcreate)(void*, int);
-    void (*xomadd)(void*, void*);
-    void *(*xommul)(void*, void*);
-    void *(*scicreate)(void);
-    double (*scistats)(void*, char*);
-    void *(*xlearncreate)(void);
-    void (*xlearntrain)(void*, void*, void*);
-    void *(*xlearnpredict)(void*, void*);
-    void *(*torchcreate)(void);
-    void (*torchtrain)(void*, void*, void*, int);
-    void *(*torchpredict)(void*, void*);
-    void *(*fluxcreate)(void);
-    void (*fluxtrain)(void*, void*, void*, int);
-    void *(*fluxpredict)(void*, void*);
-    void *(*vision2create)(void);
-    void (*vision2load)(void*, char*);
-    void *(*vision2detect)(void*);
-    void *(*vision2classify)(void*);
-    void *(*shieldcreate)(void);
-    char *(*shieldtoken)(void*);
-    int (*shieldvalidate)(void*, char*);
-    void *(*cleancreate)(void);
-    char *(*cleansanitize)(void*, char*);
-#endif
     int (*unicodechar)(const char*);
     void (*lspstart)(int);
     void (*linteraddrule)(void*, const char*, const char*);
@@ -954,8 +520,16 @@ extern platformapi platform;
 
 void gcinit(void);
 void gcaddroot(object *obj);
+void gcremoveroot(object *obj);
 void gcrun(void);
+void gcmark(object *obj);
+void gcmarkenv(environment *env);
 object *gcalloc(int size);
+
+environment *envnew(environment *parent);
+void envset(environment *env, char *name, object *val, int cnst);
+object *envget(environment *env, char *name);
+environment *envfirst(void);
 
 object *makeint(long v);
 object *makefloat(double v);
@@ -1010,67 +584,22 @@ object *makevideo(void *stream, void *dec, int w, int h, float fps);
 object *makeunicode(int cp, char *utf);
 object *makelsp(void *srv, int port, int run);
 object *makelinter(object *rules, int count);
-object *makeray(void *rt);
-object *makephys(void *world);
-object *makevr(void *headset);
-object *makerl(void *agent);
-object *makellm(void *model);
-object *makeasync(void *loop);
-object *makefiber(void *fiber);
-object *makechannel(void *ch);
-object *makesemaphore(void *sem);
-object *makethreadpool(void *pool);
-object *makehttp3(void *stream);
-object *makesse(void *sse);
-object *makegraphql(void *schema);
-object *makecipher(void *cipher);
-object *makejwt(void *jwt);
-object *makeoauth(void *oauth);
-object *makebigint(void *bi);
-object *makecomplex(double real, double imag);
-object *makebigdec(void *bd);
-object *makematrix(void *m);
-object *makedataframe(void *df);
-object *makesym(void *sym);
-object *makeplot(void *plot);
-object *makeviz3d(void *viz);
-object *makegpuobj(void *gpu);
-object *makejitobj(void *jit);
-object *makesandbox(void *sb);
-object *makestacktrace(void *st);
-object *makeplugin(void *pl);
-object *makevulkanobj(void *vk);
-object *maked3d12obj(void *d3d);
-object *makeanimobj(void *anim);
-object *makeaudioobj(void *audio);
-object *makenetobj(void *net);
-object *makeecsobj(void *ecs);
-object *makesceneobj(void *scene);
-object *makeassetobj(void *asset);
-object *makeconsoleobj(void *console);
-object *makewsobj(void *ws);
-object *makesessionobj(void *session);
-object *makefrontendobj(void *frontend);
-object *makeapiframework(void *api);
-object *makeratelimitobj(void *rate);
-object *makexomobj(void *xom);
-object *makesciobj(void *sci);
-object *makexlearnobj(void *xlearn);
-object *maketorchobj(void *torch);
-object *makefluxobj(void *flux);
-object *makevision2obj(void *vision2);
-object *makeshieldobj(void *shield);
-object *makecleanobj(void *clean);
+object *makefile(FILE *f, int fd, int mode);
+object *makethread(object *func, object *args);
 
 void listappend(object *list, object *item);
 object *listpop(object *list, int index);
 void listinsert(object *list, int index, object *item);
+void listsort(object *list);
 void dictset(object *dict, object *key, object *val);
 object *dictget(object *dict, object *key);
 int dicthas(object *dict, object *key);
 object *dictkeys(object *dict);
 object *dictvalues(object *dict);
 object *dictitems(object *dict);
+int hasattr(object *obj, char *name);
+object *getattr(object *obj, char *name);
+void setattr(object *obj, char *name, object *val);
 
 int istruthy(object *v);
 int valuesequal(object *a, object *b);
@@ -1121,7 +650,6 @@ void *platformallocate(int size);
 void platformdeallocate(void *ptr);
 void *platformreallocate(void *ptr, int size);
 int platformgetpagesize(void);
-#ifndef __ANDROID__
 int platformpcapopen(const char *iface, char *err);
 int platformpcapnext(int handle, unsigned char **data, int *len);
 int platformpcapinject(int handle, unsigned char *packet, int len);
@@ -1129,198 +657,17 @@ void platformpcapclose(int handle);
 int platformbluetoothopen(void);
 int platformbluetoothscan(int handle, object *devices);
 void platformbluetoothclose(int handle);
-#endif
 int platformprocessopen(int pid, int flags);
 int platformprocessread(int handle, long address, unsigned char *buf, int size);
 int platformprocesswrite(int handle, long address, unsigned char *buf, int size);
 void platformprocessclose(int handle);
 int platformprocessfind(const char *name);
-int platformsslinit(void);
-void *platformsslctxnew(void);
-void *platformsslnew(void *ctx);
-int platformsslconnect(void *ssl, int fd);
-int platformsslwrite(void *ssl, const char *data, int len);
-int platformsslread(void *ssl, char *buf, int len);
-void platformsslclose(void *ssl);
-void platformssldestroy(void *ssl);
-#ifndef __ANDROID__
-int platformrenderdocstart(void);
-void platformrenderdocend(void);
-void platformimguiinit(void *window);
-void platformimguiupdate(void *window);
-void platformimguirender(void *window);
-void *platformgltfload(const char *path);
-void platformphysdebugdraw(float *pos, int count, int r, int g, int b);
-void *platformaudiomixcreate(int channels);
-void platformaudiomixadd(void *mix, float *samples, int count);
-void platformaudiomixplay(void *mix);
-void *platformvideocreate(void);
-int platformvideoload(void *vid, const char *path);
-int platformvideoplay(void *vid);
-int platformvideoframe(void *vid, unsigned char **data);
-void *platformraycreate(void);
-void platformrayrender(void *ray, int w, int h);
-void platformraysetlight(void *ray, float x, float y, float z, float i);
-void platformraysetmaterial(void *ray, float r, float g, float b, float s);
-void *platformphyscreate(void);
-void platformphysaddbody(void *phys, float x, float y, float z, float m);
-void platformphysstep(void *phys, float dt);
-void platformphyssetgravity(void *phys, float x, float y, float z);
-void *platformvrcreate(void);
-int platformvrconnect(void *vr);
-void platformvrpoll(void *vr);
-void platformvrrender(void *vr);
-void *platformrlcreate(void);
-void platformrltrain(void *rl, int states, int actions, float lr);
-void *platformrlpredict(void *rl, float *state);
-void *platformllmcreate(void);
-int platformllmload(void *llm, const char *path);
-char *platformllmgenerate(void *llm, const char *prompt);
-void *platformasynccreate(void);
-void platformasyncadd(void *async, void *task);
-int platformasyncrun(void *async);
-void *platformfibercreate(void);
-void platformfiberswitch(void *fiber);
-void *platformchannelcreate(int size);
-void platformchannelsend(void *ch, void *data);
-void *platformchannelrecv(void *ch);
-void *platformsemcreate(int count);
-void platformsemwait(void *sem);
-void platformsempost(void *sem);
-void *platformpoolcreate(int size);
-void platformpoolsubmit(void *pool, void *task);
-void platformpoolwait(void *pool);
-void *platformhttp3create(void);
-int platformhttp3listen(void *http3, int port);
-void platformhttp3serve(void *http3);
-void *platformssecreate(void);
-void platformsseadd(void *sse, const char *id);
-void platformssesend(void *sse, const char *data);
-void *platformgraphqlcreate(void);
-void platformgraphqladdquery(void *gql, const char *name, void *fn);
-void platformgraphqladdmutation(void *gql, const char *name, void *fn);
-void *platformgraphqlserve(void *gql, int port);
-void *platformciphercreate(void);
-void platformcipherencrypt(void *cipher, char *data, int len);
-void platformcipherdecrypt(void *cipher, char *data, int len);
-void *platformjwtcreate(void);
-char *platformjwtencode(void *jwt, char *secret);
-void *platformjwtdecode(void *jwt, char *token);
-void *platformoauthcreate(void);
-char *platformoauthauthurl(void *oauth);
-char *platformoauthgettoken(void *oauth, char *code);
-void *platformbigintcreate(char *str);
-void *platformbigintadd(void *a, void *b);
-void *platformbigintmul(void *a, void *b);
-void *platformcomplexcreate(double r, double i);
-void *platformcomplexadd(void *a, void *b);
-void *platformcomplexmul(void *a, void *b);
-void *platformbigdeccreate(char *str, int scale);
-void *platformbigdecadd(void *a, void *b);
-void *platformbigdecmul(void *a, void *b);
-void *platformmatrixcreate(int r, int c);
-void platformmatrixset(void *m, int r, int c, double v);
-void *platformmatrixmul(void *a, void *b);
-void *platformdataframecreate(void);
-void platformdataframeload(void *df, char *path);
-void *platformdataframefilter(void *df, void *fn);
-void *platformsymcreate(char *expr);
-void *platformsymdiff(void *sym, char *var);
-void *platformsymintegrate(void *sym, char *var);
-void *platformplotcreate(void);
-void platformplotline(void *plot, float *x, float *y, int n);
-void platformplotscatter(void *plot, float *x, float *y, int n);
-void platformplotsave(void *plot, char *path);
-void *platformviz3dcreate(void);
-void platformviz3dadd(void *viz, float *x, float *y, float *z, int n);
-void platformviz3drender(void *viz);
-void *platformgpucreate(void);
-void *platformgpukernel(void *gpu, char *src);
-void platformgpurun(void *gpu, void *kernel, int n);
-void *platformjitcreate(void);
-void *platformjitcompile(void *jit, char *src);
-void *platformjitexec(void *jit, void **args);
-void *platformsandboxcreate(void);
-void platformsandboxsetperm(void *sb, char *path, int perm);
-void *platformsandboxrun(void *sb, void *fn);
-void *platformstacktracecreate(void);
-void platformstacktraceadd(void *st, char *file, int line);
-void *platformstacktraceget(void *st);
-void *platformplugincreate(void);
-int platformpluginload(void *plugin, char *path);
-void *platformplugincall(void *plugin, char *name, void *args);
-void *platformvulkancreate(void);
-void platformvulkanrender(void *vk);
-void *platformd3d12create(void);
-void platformd3d12render(void *d3d);
-void *platformanimcreate(void);
-void platformanimaddbone(void *anim, char *name, int parent);
-void platformanimaddkeyframe(void *anim, int bone, float time, float *pos, float *rot, float *scale);
-void platformanimplay(void *anim, char *name, float speed);
-void platformanimupdate(void *anim, float dt);
-void *platformaudiocreate(void);
-void platformaudioload(void *audio, char *path);
-void platformaudioplay(void *audio);
-void platformaudiostop(void *audio);
-void *platformnetcreate(void);
-void platformnetlisten(void *net, int port);
-void platformnetsend(void *net, char *data, int len);
-void *platformnetrecv(void *net);
-void *platformecscreate(void);
-void platformecsaddentity(void *ecs, void *entity);
-void platformecsaddcomponent(void *ecs, void *entity, int type, void *comp);
-void platformecssystem(void *ecs, int type, void *fn);
-void platformecsupdate(void *ecs, float dt);
-void *platformscenecreate(void);
-void platformsceneaddnode(void *scene, void *node);
-void platformscenerender(void *scene);
-void *platformassetcreate(void);
-void platformassetload(void *asset, char *path);
-void *platformassetget(void *asset, char *name);
-void *platformconsolecreate(void *ctx, char *platform);
-int platformconsoleconnect(void *console);
-void platformconsoledeploy(void *console);
-void *platformwscreate(void);
-void platformwsadd(void *ws, int id, void *fn);
-void platformwssend(void *ws, int id, char *data);
-void *platformsessioncreate(void);
-void platformsessionset(void *session, char *key, void *val);
-void *platformsessionget(void *session, char *key);
-void *platformfrontendcreate(void);
-void platformfrontendadd(void *fe, char *name, void *comp);
-void platformfrontendrender(void *fe);
-void *platformapicreate(void);
-void platformapiaddroute(void *api, char *path, char *method, void *fn);
-void platformapistart(void *api, int port);
-void *platformratelimitcreate(int limit, int window);
-int platformratelimitcheck(void *rl, char *key);
-void *platformxomcreate(void *data, int size);
-void platformxomadd(void *n1, void *n2);
-void *platformxommul(void *n1, void *n2);
-void *platformscicreate(void);
-double platformscistats(void *sci, char *name);
-void *platformxlearncreate(void);
-void platformxlearntrain(void *xl, void *x, void *y);
-void *platformxlearnpredict(void *xl, void *x);
-void *platformtorchcreate(void);
-void platformtorchtrain(void *tc, void *x, void *y, int epochs);
-void *platformtorchpredict(void *tc, void *x);
-void *platformfluxcreate(void);
-void platformfluxtrain(void *fx, void *x, void *y, int epochs);
-void *platformfluxpredict(void *fx, void *x);
-void *platformvision2create(void);
-void platformvision2load(void *cv, char *path);
-void *platformvision2detect(void *cv);
-void *platformvision2classify(void *cv);
-void *platformshieldcreate(void);
-char *platformshieldtoken(void *cs);
-int platformshieldvalidate(void *cs, char *token);
-void *platformcleancreate(void);
-char *platformcleansanitize(void *cl, char *input);
-#endif
-int platformunicodechar(const char *utf8);
-void platformlspstart(int port);
-void platformlinteraddrule(void *linter, const char *name, const char *pattern);
+void platformexit(int code);
+char **platformlistdir(const char *path, int *count);
+int platformmkdir(const char *path);
+int platformremove(const char *path);
+int platformrename(const char *oldp, const char *newp);
+void *platformgetproc(void *lib, const char *name);
 
 void registerhttplib(environment *env);
 void registerwebsocketlib(environment *env);
@@ -1379,7 +726,7 @@ void registerassetlib(environment *env);
 void registerframedebuglib(environment *env);
 void registerperfproflib(environment *env);
 void registerbuildsyslib(environment *env);
-void registerassetpip elib(environment *env);
+void registerassetpipelinelib(environment *env);
 void registerfluidlib(environment *env);
 void registeriklib(environment *env);
 void registermorphlib(environment *env);
@@ -1460,14 +807,13 @@ void registerachievementslib(environment *env);
 void registerleaderboardslib(environment *env);
 void registeriaplib(environment *env);
 void registerantipiracylib(environment *env);
-void registerdr mlib(environment *env);
+void registerdrmlib(environment *env);
 void registerobjectpoollib(environment *env);
 void registereventsyslib(environment *env);
 void registerserviceloclib(environment *env);
 void registerdilib(environment *env);
 void registercoroutinelib(environment *env);
 void registertimerlib(environment *env);
-void registerwebrtclib(environment *env);
 void registerwsclientlib(environment *env);
 void registerssllib(environment *env);
 void registerrenderdoclib(environment *env);
@@ -1476,59 +822,56 @@ void registergltflib(environment *env);
 void registerphysdebuglib(environment *env);
 void registeraudiomixerlib(environment *env);
 void registervideolib(environment *env);
-void registerunicodelib(environment *env);
 void registerlsplib(environment *env);
 void registerlinterlib(environment *env);
-void registerraymodule(environment *env);
-void registerphysmodule(environment *env);
-void registervrmodule(environment *env);
-void registerrlmodule(environment *env);
-void registerllmmodule(environment *env);
-void registerasyncmodule(environment *env);
-void registerfibermodule(environment *env);
-void registerchannelmodule(environment *env);
-void registersemmodule(environment *env);
-void registerpoolmodule(environment *env);
-void registerhttp3module(environment *env);
-void registerssemodule(environment *env);
-void registergraphqlmodule(environment *env);
-void registerciphermodule(environment *env);
-void registerjwtmodule(environment *env);
-void registeroauthmodule(environment *env);
-void registerbigintmodule(environment *env);
-void registercomplexmodule(environment *env);
-void registerbigdecmodule(environment *env);
-void registermatrixmodule(environment *env);
-void registerdataframemodule(environment *env);
-void registersymmodule(environment *env);
-void registerplotmodule(environment *env);
-void registerviz3dmodule(environment *env);
-void registergpumodule(environment *env);
-void registerjitmodule(environment *env);
-void registersandboxmodule(environment *env);
-void registerstackmodule(environment *env);
-void registerpluginmodule(environment *env);
-void registervulkanmodule(environment *env);
-void registerd3d12module(environment *env);
-void registeranimmodule(environment *env);
-void registeraudiomodule(environment *env);
-void registernetmodule(environment *env);
-void registerecsmodule(environment *env);
-void registerscenemodule(environment *env);
-void registerassetmodule(environment *env);
-void registerconsolemodule(environment *env);
-void registerwsmodule(environment *env);
-void registersessionmodule(environment *env);
-void registerfrontendmodule(environment *env);
-void registerapimodule(environment *env);
-void registerratelimitmodule(environment *env);
-void registerxommodule(environment *env);
-void registerscimodule(environment *env);
-void registerxlearnmodule(environment *env);
-void registertorchmodule(environment *env);
-void registerfluxmodule(environment *env);
-void registervision2module(environment *env);
-void registershieldmodule(environment *env);
-void registercleanmodule(environment *env);
+void registermathlib(environment *env);
+void registermathfulllib(environment *env);
+void registervectorlib(environment *env);
+void registergraphicslib(environment *env);
+void registeroslib(environment *env);
+void registersyslib(environment *env);
+void registerrandomlib(environment *env);
+void registerrelib(environment *env);
+void registerjsonlib(environment *env);
+void registerhashliblib(environment *env);
+void registersubprocesslib(environment *env);
+void registersocketlib(environment *env);
+void registerdatetime(environment *env);
+void registerdatetimelib(environment *env);
+void registercsvlib(environment *env);
+void registertempfilelib(environment *env);
+void registerlogginglib(environment *env);
+void registerargparselib(environment *env);
+void registersecretslib(environment *env);
+void registeritertools(environment *env);
+void registercollectionslib(environment *env);
+void registerthreadlib(environment *env);
+void registerstructlib(environment *env);
+void registershutillib(environment *env);
+void registerstringlib(environment *env);
+void registerstatisticslib(environment *env);
+void registerio lib(environment *env);
+void registerbase64lib(environment *env);
+void registerbinasciilib(environment *env);
+void registercmathlib(environment *env);
+void registerconfigparserlib(environment *env);
+void registerdecimal(environment *env);
+void registerdecimallib(environment *env);
+void registerdiffliblib(environment *env);
+void registeremaillib(environment *env);
+void registerfunctoolslib(environment *env);
+void registerhmaclib(environment *env);
+void registerzliblib(environment *env);
+void registeruuidslib(environment *env);
+void registerwebbrowserlib(environment *env);
+void registerweakreflib(environment *env);
+void registerwithlib(environment *env);
+void registerunittestlib(environment *env);
+void registertextwraplib(environment *env);
+void registerarraylib(environment *env);
+void registerplotlib(environment *env);
+void registerpandaslib(environment *env);
+void registernumpylib(environment *env);
+void registertensorlib(environment *env);
 
 #endif
