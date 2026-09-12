@@ -17,7 +17,7 @@ object *makefloat(double v) {
 object *makestring(char *v) {
     object *obj = gcalloc(sizeof(object));
     obj->type = 2;
-    obj->sval = strdup(v);
+    obj->sval = strdup(v ? v : "");
     return obj;
 }
 
@@ -65,7 +65,7 @@ object *makerange(long start, long stop, long step) {
 object *makefunc(char **params, char **typehints, int pcount, stmt **body, int bcount, environment *closure, char *name, int isasync, int isgenerator) {
     object *obj = gcalloc(sizeof(object));
     obj->type = 7;
-    obj->func.params = malloc(sizeof(char*) * pcount);
+    obj->func.params = malloc(sizeof(char*) * (pcount > 0 ? pcount : 1));
     for (int i = 0; i < pcount; i++) obj->func.params[i] = strdup(params[i]);
     obj->func.pcount = pcount;
     obj->func.body = body;
@@ -94,6 +94,7 @@ object *makeclass(char *name, environment *attrs, object *bases) {
 }
 
 object *makeinstance(object *klass, object **args, int argc) {
+    (void)args; (void)argc;
     object *obj = gcalloc(sizeof(object));
     obj->type = 10;
     obj->instance.klass = klass;
@@ -107,6 +108,14 @@ object *makemodule(char *name, void *handle) {
     obj->module.name = name ? strdup(name) : NULL;
     obj->module.exports = envnew(NULL);
     obj->module.handle = handle;
+    return obj;
+}
+
+object *makenative(void *handle, void *data) {
+    object *obj = gcalloc(sizeof(object));
+    obj->type = 13;
+    obj->native.handle = handle;
+    obj->native.data = data;
     return obj;
 }
 
@@ -149,10 +158,28 @@ object *makeglwin(void *display, void *window, void *glc) {
     return obj;
 }
 
+object *makefile(FILE *f, int fd, int mode) {
+    object *obj = gcalloc(sizeof(object));
+    obj->type = 23;
+    obj->fileobj.file = f;
+    obj->fileobj.fd = fd;
+    obj->fileobj.mode = mode;
+    return obj;
+}
+
+object *makethread(object *func, object *args) {
+    object *obj = gcalloc(sizeof(object));
+    obj->type = 25;
+    obj->threadobj.func = func;
+    obj->threadobj.args = args;
+    obj->threadobj.running = 1;
+    return obj;
+}
+
 void listappend(object *list, object *item) {
     if (list->type != 5) return;
     if (list->list.count >= list->list.cap) {
-        list->list.cap *= 2;
+        list->list.cap = list->list.cap ? list->list.cap * 2 : 4;
         list->list.items = realloc(list->list.items, sizeof(object*) * list->list.cap);
     }
     list->list.items[list->list.count++] = item;
@@ -168,6 +195,34 @@ object *listpop(object *list, int index) {
     }
     list->list.count--;
     return item;
+}
+
+void listinsert(object *list, int index, object *item) {
+    if (list->type != 5) return;
+    if (index < 0) index = 0;
+    if (index > list->list.count) index = list->list.count;
+    if (list->list.count >= list->list.cap) {
+        list->list.cap = list->list.cap ? list->list.cap * 2 : 4;
+        list->list.items = realloc(list->list.items, sizeof(object*) * list->list.cap);
+    }
+    for (int i = list->list.count; i > index; i--) {
+        list->list.items[i] = list->list.items[i-1];
+    }
+    list->list.items[index] = item;
+    list->list.count++;
+}
+
+static int cmpobjects(const void *a, const void *b) {
+    object *oa = *(object**)a;
+    object *ob = *(object**)b;
+    if (lessthan(oa, ob)) return -1;
+    if (greaterthan(oa, ob)) return 1;
+    return 0;
+}
+
+void listsort(object *list) {
+    if (list->type != 5) return;
+    qsort(list->list.items, list->list.count, sizeof(object*), cmpobjects);
 }
 
 void dictset(object *dict, object *key, object *val) {
@@ -204,27 +259,84 @@ int dicthas(object *dict, object *key) {
 
 object *dictkeys(object *dict) {
     object *keys = makelist();
+    gcaddroot(keys);
     for (int i = 0; i < dict->dict.count; i++) {
         listappend(keys, dict->dict.keyvals[i]);
     }
+    gcremoveroot(keys);
     return keys;
 }
 
 object *dictvalues(object *dict) {
     object *vals = makelist();
+    gcaddroot(vals);
     for (int i = 0; i < dict->dict.count; i++) {
         listappend(vals, dict->dict.vals[i]);
     }
+    gcremoveroot(vals);
     return vals;
 }
 
 object *dictitems(object *dict) {
     object *items = makelist();
+    gcaddroot(items);
     for (int i = 0; i < dict->dict.count; i++) {
         object *pair = makelist();
+        gcaddroot(pair);
         listappend(pair, dict->dict.keyvals[i]);
         listappend(pair, dict->dict.vals[i]);
+        gcremoveroot(pair);
         listappend(items, pair);
     }
+    gcremoveroot(items);
     return items;
+}
+
+int hasattr(object *obj, char *name) {
+    if (obj->type == 9 && obj->klass.attrs) {
+        return envget((environment*)obj->klass.attrs, name) != NULL;
+    }
+    if (obj->type == 10) {
+        if (obj->instance.attrs && envget((environment*)obj->instance.attrs, name)) return 1;
+        if (obj->instance.klass && obj->instance.klass->klass.attrs) {
+            return envget((environment*)obj->instance.klass->klass.attrs, name) != NULL;
+        }
+    }
+    if (obj->type == 12 && obj->module.exports) {
+        return envget((environment*)obj->module.exports, name) != NULL;
+    }
+    return 0;
+}
+
+object *getattr(object *obj, char *name) {
+    if (obj->type == 9 && obj->klass.attrs) {
+        object *v = envget((environment*)obj->klass.attrs, name);
+        if (v) return v;
+    }
+    if (obj->type == 10) {
+        if (obj->instance.attrs) {
+            object *v = envget((environment*)obj->instance.attrs, name);
+            if (v) return v;
+        }
+        if (obj->instance.klass && obj->instance.klass->klass.attrs) {
+            object *v = envget((environment*)obj->instance.klass->klass.attrs, name);
+            if (v) return v;
+        }
+    }
+    if (obj->type == 12 && obj->module.exports) {
+        object *v = envget((environment*)obj->module.exports, name);
+        if (v) return v;
+    }
+    return NULL;
+}
+
+void setattr(object *obj, char *name, object *val) {
+    if (obj->type == 10 && obj->instance.attrs) {
+        envset((environment*)obj->instance.attrs, name, val, 0);
+        return;
+    }
+    if (obj->type == 9 && obj->klass.attrs) {
+        envset((environment*)obj->klass.attrs, name, val, 0);
+        return;
+    }
 }
