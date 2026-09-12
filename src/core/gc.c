@@ -1,131 +1,187 @@
 #include "axton.h"
-#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
 
-static object *young = NULL;
-static object *old = NULL;
-static int youngcount = 0;
-static int oldcount = 0;
-static int youngthreshold = 1024;
-static int oldthreshold = 4096;
-static pthread_mutex_t gclock = PTHREAD_MUTEX_INITIALIZER;
+static object *allobjects = NULL;
+static size_t objcount = 0;
+static size_t gcnext = 4096;
+static object **roots = NULL;
+static size_t rootcount = 0;
+static size_t rootcap = 0;
+
+extern environment *envfirst(void);
+extern environment *globalenv;
+
+static void freeobject(object *obj);
 
 void gcinit(void) {
-    young = NULL;
-    old = NULL;
-    youngcount = 0;
-    oldcount = 0;
+    allobjects = NULL;
+    objcount = 0;
+    gcnext = 4096;
+    roots = NULL;
+    rootcount = 0;
+    rootcap = 0;
 }
 
 void gcaddroot(object *obj) {
     if (!obj) return;
-    pthread_mutex_lock(&gclock);
-    obj->next = young;
-    if (young) young->prev = obj;
-    young = obj;
-    obj->prev = NULL;
-    youngcount++;
-    if (youngcount > youngthreshold) {
-        gcrun();
+    for (size_t i = 0; i < rootcount; i++) {
+        if (roots[i] == obj) return;
     }
-    pthread_mutex_unlock(&gclock);
+    if (rootcount >= rootcap) {
+        rootcap = rootcap ? rootcap * 2 : 1024;
+        roots = realloc(roots, rootcap * sizeof(object*));
+    }
+    roots[rootcount++] = obj;
+}
+
+void gcremoveroot(object *obj) {
+    for (size_t i = 0; i < rootcount; i++) {
+        if (roots[i] == obj) {
+            roots[i] = roots[--rootcount];
+            return;
+        }
+    }
+}
+
+object *gcalloc(int size) {
+    object *obj = calloc(1, size);
+    obj->next = allobjects;
+    allobjects = obj;
+    objcount++;
+    if (objcount > gcnext) gcrun();
+    return obj;
+}
+
+void gcmarkenv(environment *env) {
+    if (!env || env->marked) return;
+    env->marked = 1;
+    for (int i = 0; i < env->cap; i++) {
+        if (env->slots[i].used) {
+            gcmark(env->slots[i].value);
+        }
+    }
+    gcmarkenv(env->parent);
 }
 
 void gcmark(object *obj) {
     if (!obj || obj->marked) return;
     obj->marked = 1;
-    if (obj->type == 5) {
-        for (int i = 0; i < obj->list.count; i++) gcmark(obj->list.items[i]);
-    }
-    if (obj->type == 6) {
-        for (int i = 0; i < obj->dict.count; i++) {
-            gcmark(obj->dict.keyvals[i]);
-            gcmark(obj->dict.vals[i]);
-        }
-    }
-    if (obj->type == 7 && obj->func.closure) {
-        environment *e = (environment*)obj->func.closure;
-        for (int i = 0; i < e->count; i++) {
-            if (e->values[i]) gcmark(e->values[i]);
-        }
-    }
-    if (obj->type == 10 && obj->instance.attrs) {
-        environment *e = (environment*)obj->instance.attrs;
-        for (int i = 0; i < e->count; i++) {
-            if (e->values[i]) gcmark(e->values[i]);
-        }
+    switch (obj->type) {
+        case 5:
+            for (int i = 0; i < obj->list.count; i++) gcmark(obj->list.items[i]);
+            break;
+        case 6:
+            for (int i = 0; i < obj->dict.count; i++) {
+                gcmark(obj->dict.keyvals[i]);
+                gcmark(obj->dict.vals[i]);
+            }
+            break;
+        case 7:
+            gcmarkenv((environment*)obj->func.closure);
+            for (int i = 0; i < obj->func.bcount; i++) {
+                gcmark((object*)obj->func.body[i]);
+            }
+            gcmark(obj->func.decorators);
+            break;
+        case 9:
+            if (obj->klass.attrs) gcmarkenv((environment*)obj->klass.attrs);
+            gcmark(obj->klass.bases);
+            break;
+        case 10:
+            gcmark(obj->instance.klass);
+            if (obj->instance.attrs) gcmarkenv((environment*)obj->instance.attrs);
+            break;
+        case 12:
+            if (obj->module.exports) gcmarkenv((environment*)obj->module.exports);
+            break;
+        case 21:
+            gcmark(obj->generator.func);
+            gcmark(obj->generator.value);
+            if (obj->generator.frame) gcmarkenv((environment*)obj->generator.frame);
+            break;
+        case 22:
+            gcmark(obj->coroutine.func);
+            if (obj->coroutine.frame) gcmarkenv((environment*)obj->coroutine.frame);
+            break;
+        default:
+            break;
     }
 }
 
-static void markroots(void) {
-    object *obj = young;
-    while (obj) {
-        gcmark(obj);
-        obj = obj->next;
-    }
-    obj = old;
-    while (obj) {
-        gcmark(obj);
-        obj = obj->next;
-    }
-}
-
-static void sweep(object **list, int *count) {
-    object *obj = *list;
-    while (obj) {
-        object *next = obj->next;
-        if (!obj->marked) {
-            if (obj->prev) obj->prev->next = obj->next;
-            if (obj->next) obj->next->prev = obj->prev;
-            if (*list == obj) *list = obj->next;
-            free(obj);
-            (*count)--;
+static void gcsweepenvs(void) {
+    environment *prev = NULL;
+    environment *env = envfirst();
+    while (env) {
+        environment *next = env->next;
+        if (env->marked) {
+            env->marked = 0;
+            prev = env;
+            env = next;
         } else {
-            obj->marked = 0;
+            if (prev) prev->next = next;
+            for (int j = 0; j < env->cap; j++) {
+                if (env->slots[j].used) free(env->slots[j].name);
+            }
+            free(env->slots);
+            free(env);
+            env = next;
         }
-        obj = next;
+    }
+}
+
+static void freeobject(object *dead) {
+    switch (dead->type) {
+        case 2: free(dead->sval); break;
+        case 5: free(dead->list.items); break;
+        case 6:
+            free(dead->dict.keys);
+            free(dead->dict.keyvals);
+            free(dead->dict.vals);
+            break;
+        case 7:
+            for (int i = 0; i < dead->func.pcount; i++) free(dead->func.params[i]);
+            free(dead->func.params);
+            free(dead->func.name);
+            break;
+        case 9: free(dead->klass.name); break;
+        case 12: free(dead->module.name); break;
+        case 20: free(dead->tensor.data); free(dead->tensor.shape); break;
+        default: break;
+    }
+    free(dead);
+}
+
+static void gcsweepobjects(void) {
+    object **prev = &allobjects;
+    object *obj = allobjects;
+    while (obj) {
+        if (obj->marked) {
+            obj->marked = 0;
+            prev = &obj->next;
+            obj = obj->next;
+        } else {
+            *prev = obj->next;
+            object *dead = obj;
+            obj = obj->next;
+            objcount--;
+            freeobject(dead);
+        }
     }
 }
 
 void gcrun(void) {
-    pthread_mutex_lock(&gclock);
-    markroots();
-    sweep(&young, &youngcount);
-    object *obj = young;
-    while (obj) {
-        object *next = obj->next;
-        if (obj->marked) {
-            if (obj->prev) obj->prev->next = obj->next;
-            if (obj->next) obj->next->prev = obj->prev;
-            if (young == obj) young = obj->next;
-            youngcount--;
-            obj->next = old;
-            if (old) old->prev = obj;
-            old = obj;
-            obj->prev = NULL;
-            oldcount++;
+    for (size_t i = 0; i < rootcount; i++) gcmark(roots[i]);
+    if (globalenv) gcmarkenv(globalenv);
+    object *cur = allobjects;
+    while (cur) {
+        if (cur->type == 7 || cur->type == 9 || cur->type == 10 || cur->type == 12 || cur->type == 21 || cur->type == 22) {
+            gcmark(cur);
         }
-        obj = next;
+        cur = cur->next;
     }
-    if (oldcount > oldthreshold) {
-        markroots();
-        sweep(&old, &oldcount);
-    }
-    pthread_mutex_unlock(&gclock);
-}
-
-object *gcalloc(int size) {
-    object *obj = calloc(1, size);
-    obj->marked = 0;
-    obj->refcount = 0;
-    obj->file = NULL;
-    obj->line = 0;
-    obj->next = young;
-    if (young) young->prev = obj;
-    young = obj;
-    obj->prev = NULL;
-    youngcount++;
-    if (youngcount > youngthreshold) {
-        gcrun();
-    }
-    return obj;
+    gcsweepenvs();
+    gcsweepobjects();
+    gcnext = objcount * 2 + 4096;
+    if (gcnext < 4096) gcnext = 4096;
 }
