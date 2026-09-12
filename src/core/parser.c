@@ -74,6 +74,19 @@ typedef struct attribexpr {
     char *attr;
 } attribexpr;
 
+typedef struct listexpr {
+    expr base;
+    expr **items;
+    int count;
+} listexpr;
+
+typedef struct dictexpr {
+    expr base;
+    expr **keys;
+    expr **values;
+    int count;
+} dictexpr;
+
 typedef struct letexpr {
     stmt base;
     char *name;
@@ -135,6 +148,19 @@ typedef struct exprstmt {
     expr *expression;
 } exprstmt;
 
+typedef struct tryexpr {
+    stmt base;
+    stmtlist *body;
+    char *catchvar;
+    stmtlist *catchbody;
+    stmtlist *finallybody;
+} tryexpr;
+
+typedef struct throwexpr {
+    stmt base;
+    expr *value;
+} throwexpr;
+
 static token peektoken(parser *p) {
     if (p->pos >= p->count) {
         token t = {TOKEOF, NULL, 0, 0};
@@ -155,7 +181,7 @@ static void expect(parser *p, toktype type) {
     token t = nexttoken(p);
     if (t.type != type) {
         char msg[256];
-        snprintf(msg, sizeof(msg), "line %d expected token %d", t.line, type);
+        snprintf(msg, sizeof(msg), "line %d expected token %d got %d", t.line, type, t.type);
         throwexception(msg);
     }
 }
@@ -169,12 +195,14 @@ static expr *parseprimary(parser *p) {
     if (t.type == TOKIDENT) {
         nexttoken(p);
         identexpr *e = malloc(sizeof(identexpr));
+        e->base.type = EXPR_IDENT;
         e->base.eval = NULL;
         e->base.node.line = t.line;
         e->name = strdup(t.text);
         if (peektoken(p).type == TOKLPAREN) {
             nexttoken(p);
             callexpr *call = malloc(sizeof(callexpr));
+            call->base.type = EXPR_CALL;
             call->base.eval = NULL;
             call->base.node.line = t.line;
             call->callee = (expr*)e;
@@ -196,6 +224,7 @@ static expr *parseprimary(parser *p) {
         if (peektoken(p).type == TOKDOT) {
             nexttoken(p);
             attribexpr *attr = malloc(sizeof(attribexpr));
+            attr->base.type = EXPR_ATTR;
             attr->base.eval = NULL;
             attr->base.node.line = t.line;
             attr->target = (expr*)e;
@@ -207,6 +236,7 @@ static expr *parseprimary(parser *p) {
         if (peektoken(p).type == TOKLBRACKET) {
             nexttoken(p);
             indexexpr *idx = malloc(sizeof(indexexpr));
+            idx->base.type = EXPR_INDEX;
             idx->base.eval = NULL;
             idx->base.node.line = t.line;
             idx->target = (expr*)e;
@@ -219,6 +249,7 @@ static expr *parseprimary(parser *p) {
     if (t.type == TOKNUMBER) {
         nexttoken(p);
         numberexpr *e = malloc(sizeof(numberexpr));
+        e->base.type = EXPR_NUMBER;
         e->base.eval = NULL;
         e->base.node.line = t.line;
         e->value = atof(t.text);
@@ -227,6 +258,7 @@ static expr *parseprimary(parser *p) {
     if (t.type == TOKSTRING) {
         nexttoken(p);
         stringexpr *e = malloc(sizeof(stringexpr));
+        e->base.type = EXPR_STRING;
         e->base.eval = NULL;
         e->base.node.line = t.line;
         e->value = strdup(t.text);
@@ -235,6 +267,7 @@ static expr *parseprimary(parser *p) {
     if (t.type == TOKTRUE) {
         nexttoken(p);
         boolexpr *e = malloc(sizeof(boolexpr));
+        e->base.type = EXPR_BOOL;
         e->base.eval = NULL;
         e->base.node.line = t.line;
         e->value = 1;
@@ -243,6 +276,7 @@ static expr *parseprimary(parser *p) {
     if (t.type == TOKFALSE) {
         nexttoken(p);
         boolexpr *e = malloc(sizeof(boolexpr));
+        e->base.type = EXPR_BOOL;
         e->base.eval = NULL;
         e->base.node.line = t.line;
         e->value = 0;
@@ -251,6 +285,7 @@ static expr *parseprimary(parser *p) {
     if (t.type == TOKNONE) {
         nexttoken(p);
         noneexpr *e = malloc(sizeof(noneexpr));
+        e->base.type = EXPR_NONE;
         e->base.eval = NULL;
         e->base.node.line = t.line;
         return (expr*)e;
@@ -263,26 +298,47 @@ static expr *parseprimary(parser *p) {
     }
     if (t.type == TOKLBRACKET) {
         nexttoken(p);
-        exprlist *elts = malloc(sizeof(exprlist));
-        elts->items = NULL;
-        elts->count = 0;
+        listexpr *e = malloc(sizeof(listexpr));
+        e->base.type = EXPR_LIST;
+        e->base.eval = NULL;
+        e->base.node.line = t.line;
+        e->items = NULL;
+        e->count = 0;
         if (peektoken(p).type != TOKRBRACKET) {
             while (1) {
-                elts->count++;
-                elts->items = realloc(elts->items, sizeof(expr*) * elts->count);
-                elts->items[elts->count - 1] = parseexpr(p);
+                e->count++;
+                e->items = realloc(e->items, sizeof(expr*) * e->count);
+                e->items[e->count - 1] = parseexpr(p);
                 if (peektoken(p).type == TOKCOMMA) nexttoken(p);
                 else break;
             }
         }
         expect(p, TOKRBRACKET);
-        return NULL;
+        return (expr*)e;
     }
     if (t.type == TOKLBRACE) {
         nexttoken(p);
-        // dict - btw why are you reading,i already told u what this is
+        dictexpr *e = malloc(sizeof(dictexpr));
+        e->base.type = EXPR_DICT;
+        e->base.eval = NULL;
+        e->base.node.line = t.line;
+        e->keys = NULL;
+        e->values = NULL;
+        e->count = 0;
+        if (peektoken(p).type != TOKRBRACE) {
+            while (1) {
+                e->count++;
+                e->keys = realloc(e->keys, sizeof(expr*) * e->count);
+                e->values = realloc(e->values, sizeof(expr*) * e->count);
+                e->keys[e->count - 1] = parseexpr(p);
+                expect(p, TOKCOLON);
+                e->values[e->count - 1] = parseexpr(p);
+                if (peektoken(p).type == TOKCOMMA) nexttoken(p);
+                else break;
+            }
+        }
         expect(p, TOKRBRACE);
-        return NULL;
+        return (expr*)e;
     }
     char msg[256];
     snprintf(msg, sizeof(msg), "unexpected token at line %d", t.line);
@@ -295,6 +351,7 @@ static expr *parseunary(parser *p) {
     if (t.type == TOKMINUS || t.type == TOKNOT) {
         nexttoken(p);
         unaryexpr *e = malloc(sizeof(unaryexpr));
+        e->base.type = EXPR_UNARY;
         e->base.eval = NULL;
         e->base.node.line = t.line;
         e->op = t.type;
@@ -311,15 +368,14 @@ static expr *parsemul(parser *p) {
         if (t.type == TOKSTAR || t.type == TOKSLASH || t.type == TOKPERCENT) {
             nexttoken(p);
             binaryexpr *e = malloc(sizeof(binaryexpr));
+            e->base.type = EXPR_BINARY;
             e->base.eval = NULL;
-            e->base.node.line = left->line;
+            e->base.node.line = t.line;
             e->left = left;
             e->op = t.type;
             e->right = parseunary(p);
             left = (expr*)e;
-        } else {
-            break;
-        }
+        } else break;
     }
     return left;
 }
@@ -331,15 +387,14 @@ static expr *parseadd(parser *p) {
         if (t.type == TOKPLUS || t.type == TOKMINUS) {
             nexttoken(p);
             binaryexpr *e = malloc(sizeof(binaryexpr));
+            e->base.type = EXPR_BINARY;
             e->base.eval = NULL;
-            e->base.node.line = left->line;
+            e->base.node.line = t.line;
             e->left = left;
             e->op = t.type;
             e->right = parsemul(p);
             left = (expr*)e;
-        } else {
-            break;
-        }
+        } else break;
     }
     return left;
 }
@@ -352,15 +407,14 @@ static expr *parsecompare(parser *p) {
             t.type == TOKGT || t.type == TOKLE || t.type == TOKGE) {
             nexttoken(p);
             binaryexpr *e = malloc(sizeof(binaryexpr));
+            e->base.type = EXPR_BINARY;
             e->base.eval = NULL;
-            e->base.node.line = left->line;
+            e->base.node.line = t.line;
             e->left = left;
             e->op = t.type;
             e->right = parseadd(p);
             left = (expr*)e;
-        } else {
-            break;
-        }
+        } else break;
     }
     return left;
 }
@@ -370,8 +424,9 @@ static expr *parseand(parser *p) {
     while (peektoken(p).type == TOKAND) {
         nexttoken(p);
         binaryexpr *e = malloc(sizeof(binaryexpr));
+        e->base.type = EXPR_BINARY;
         e->base.eval = NULL;
-        e->base.node.line = left->line;
+        e->base.node.line = left->node.line;
         e->left = left;
         e->op = TOKAND;
         e->right = parsecompare(p);
@@ -385,8 +440,9 @@ static expr *parseor(parser *p) {
     while (peektoken(p).type == TOKOR) {
         nexttoken(p);
         binaryexpr *e = malloc(sizeof(binaryexpr));
+        e->base.type = EXPR_BINARY;
         e->base.eval = NULL;
-        e->base.node.line = left->line;
+        e->base.node.line = left->node.line;
         e->left = left;
         e->op = TOKOR;
         e->right = parseand(p);
@@ -416,6 +472,7 @@ static stmtlist *parseblock(parser *p) {
 static stmt *parselet(parser *p) {
     nexttoken(p);
     letexpr *s = malloc(sizeof(letexpr));
+    s->base.type = STMT_LET;
     token name = peektoken(p);
     expect(p, TOKIDENT);
     s->name = strdup(name.text);
@@ -430,6 +487,7 @@ static stmt *parselet(parser *p) {
 static stmt *parseconst(parser *p) {
     nexttoken(p);
     letexpr *s = malloc(sizeof(letexpr));
+    s->base.type = STMT_LET;
     token name = peektoken(p);
     expect(p, TOKIDENT);
     s->name = strdup(name.text);
@@ -444,9 +502,10 @@ static stmt *parseconst(parser *p) {
 static stmt *parsereturn(parser *p) {
     nexttoken(p);
     returnexpr *s = malloc(sizeof(returnexpr));
+    s->base.type = STMT_RETURN;
     s->base.node.line = peektoken(p).line;
     s->value = NULL;
-    if (peektoken(p).type != TOKNEWLINE && peektoken(p).type != TOKDEDENT) {
+    if (peektoken(p).type != TOKNEWLINE && peektoken(p).type != TOKDEDENT && peektoken(p).type != TOKEOF) {
         s->value = parseexpr(p);
     }
     s->base.exec = NULL;
@@ -456,6 +515,7 @@ static stmt *parsereturn(parser *p) {
 static stmt *parseif(parser *p) {
     nexttoken(p);
     ifexpr *s = malloc(sizeof(ifexpr));
+    s->base.type = STMT_IF;
     s->cond = parseexpr(p);
     expect(p, TOKCOLON);
     expect(p, TOKNEWLINE);
@@ -479,25 +539,27 @@ static stmt *parseif(parser *p) {
         s->elsebody = parseblock(p);
     }
     s->base.exec = NULL;
-    s->base.node.line = s->cond->line;
+    s->base.node.line = s->cond->node.line;
     return (stmt*)s;
 }
 
 static stmt *parsewhile(parser *p) {
     nexttoken(p);
     whileexpr *s = malloc(sizeof(whileexpr));
+    s->base.type = STMT_WHILE;
     s->cond = parseexpr(p);
     expect(p, TOKCOLON);
     expect(p, TOKNEWLINE);
     s->body = parseblock(p);
     s->base.exec = NULL;
-    s->base.node.line = s->cond->line;
+    s->base.node.line = s->cond->node.line;
     return (stmt*)s;
 }
 
 static stmt *parsefor(parser *p) {
     nexttoken(p);
     forexp *s = malloc(sizeof(forexp));
+    s->base.type = STMT_FOR;
     token var = peektoken(p);
     expect(p, TOKIDENT);
     s->var = strdup(var.text);
@@ -514,6 +576,7 @@ static stmt *parsefor(parser *p) {
 static stmt *parsebreak(parser *p) {
     nexttoken(p);
     breakexp *s = malloc(sizeof(breakexp));
+    s->base.type = STMT_BREAK;
     s->base.exec = NULL;
     s->base.node.line = peektoken(p).line;
     return (stmt*)s;
@@ -522,6 +585,7 @@ static stmt *parsebreak(parser *p) {
 static stmt *parsenext(parser *p) {
     nexttoken(p);
     nextexp *s = malloc(sizeof(nextexp));
+    s->base.type = STMT_NEXT;
     s->base.exec = NULL;
     s->base.node.line = peektoken(p).line;
     return (stmt*)s;
@@ -530,6 +594,7 @@ static stmt *parsenext(parser *p) {
 static stmt *parsefn(parser *p) {
     nexttoken(p);
     fnexp *s = malloc(sizeof(fnexp));
+    s->base.type = STMT_FN;
     token name = peektoken(p);
     expect(p, TOKIDENT);
     s->name = strdup(name.text);
@@ -559,6 +624,7 @@ static stmt *parsefn(parser *p) {
 static stmt *parseclass(parser *p) {
     nexttoken(p);
     classexp *s = malloc(sizeof(classexp));
+    s->base.type = STMT_CLASS;
     token name = peektoken(p);
     expect(p, TOKIDENT);
     s->name = strdup(name.text);
@@ -575,11 +641,54 @@ static stmt *parseclass(parser *p) {
     return (stmt*)s;
 }
 
+static stmt *parsethrow(parser *p) {
+    nexttoken(p);
+    throwexpr *s = malloc(sizeof(throwexpr));
+    s->base.type = STMT_THROW;
+    s->base.node.line = peektoken(p).line;
+    s->value = parseexpr(p);
+    s->base.exec = NULL;
+    return (stmt*)s;
+}
+
+static stmt *parsetry(parser *p) {
+    nexttoken(p);
+    tryexpr *s = malloc(sizeof(tryexpr));
+    s->base.type = STMT_TRY;
+    s->base.node.line = peektoken(p).line;
+    expect(p, TOKCOLON);
+    expect(p, TOKNEWLINE);
+    s->body = parseblock(p);
+    s->catchvar = NULL;
+    s->catchbody = NULL;
+    s->finallybody = NULL;
+    if (peektoken(p).type == TOKCATCH) {
+        nexttoken(p);
+        token var = peektoken(p);
+        if (var.type == TOKIDENT) {
+            nexttoken(p);
+            s->catchvar = strdup(var.text);
+        }
+        expect(p, TOKCOLON);
+        expect(p, TOKNEWLINE);
+        s->catchbody = parseblock(p);
+    }
+    if (peektoken(p).type == TOKFINALLY) {
+        nexttoken(p);
+        expect(p, TOKCOLON);
+        expect(p, TOKNEWLINE);
+        s->finallybody = parseblock(p);
+    }
+    s->base.exec = NULL;
+    return (stmt*)s;
+}
+
 static stmt *parseexprstmt(parser *p) {
     exprstmt *s = malloc(sizeof(exprstmt));
+    s->base.type = STMT_EXPR;
     s->expression = parseexpr(p);
     s->base.exec = NULL;
-    s->base.node.line = s->expression->line;
+    s->base.node.line = s->expression->node.line;
     return (stmt*)s;
 }
 
@@ -596,6 +705,8 @@ static stmt *parsestmt(parser *p) {
         case TOKBREAK: return parsebreak(p);
         case TOKNEXT: return parsenext(p);
         case TOKRETURN: return parsereturn(p);
+        case TOKTHROW: return parsethrow(p);
+        case TOKTRY: return parsetry(p);
         default: return parseexprstmt(p);
     }
 }
