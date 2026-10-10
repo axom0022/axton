@@ -170,38 +170,56 @@ static object *evalstmt(stmt *s, environment *env);
 
 static object *evalbinary(binaryexpr *e, environment *env) {
     object *left = evalexpr(e->left, env);
+    gcaddroot(left);
     object *right = evalexpr(e->right, env);
+    gcaddroot(right);
+    object *result = NULL;
     switch (e->op) {
-        case TOKPLUS: return addvalues(left, right);
-        case TOKMINUS: return subvalues(left, right);
-        case TOKSTAR: return mulvalues(left, right);
-        case TOKSLASH: return divvalues(left, right);
-        case TOKPERCENT: return modvalues(left, right);
-        case TOKPOWER: return powvalues(left, right);
-        case TOKEQEQ: return makebool(valuesequal(left, right));
-        case TOKNE: return makebool(!valuesequal(left, right));
-        case TOKLT: return makebool(lessthan(left, right));
-        case TOKGT: return makebool(greaterthan(left, right));
-        case TOKLE: return makebool(!greaterthan(left, right));
-        case TOKGE: return makebool(!lessthan(left, right));
-        case TOKAND: return istruthy(left) ? right : left;
-        case TOKOR: return istruthy(left) ? left : right;
+        case TOKPLUS: result = addvalues(left, right); break;
+        case TOKMINUS: result = subvalues(left, right); break;
+        case TOKSTAR: result = mulvalues(left, right); break;
+        case TOKSLASH: result = divvalues(left, right); break;
+        case TOKPERCENT: result = modvalues(left, right); break;
+        case TOKPOWER: result = powvalues(left, right); break;
+        case TOKEQEQ: result = makebool(valuesequal(left, right)); break;
+        case TOKNE: result = makebool(!valuesequal(left, right)); break;
+        case TOKLT: result = makebool(lessthan(left, right)); break;
+        case TOKGT: result = makebool(greaterthan(left, right)); break;
+        case TOKLE: result = makebool(!greaterthan(left, right)); break;
+        case TOKGE: result = makebool(!lessthan(left, right)); break;
+        case TOKAND: result = istruthy(left) ? right : left; break;
+        case TOKOR: result = istruthy(left) ? left : right; break;
         default:
+            gcremoveroot(left);
+            gcremoveroot(right);
             throwexception("unknown binary operator");
             return NULL;
     }
+    gcremoveroot(left);
+    gcremoveroot(right);
+    return result;
 }
 
 static object *evalunary(unaryexpr *e, environment *env) {
     object *operand = evalexpr(e->operand, env);
-    if (e->op == TOKNOT) return makebool(!istruthy(operand));
-    if (e->op == TOKMINUS) {
-        if (operand->type == 0) return makeint(-operand->ival);
-        if (operand->type == 1) return makefloat(-operand->fval);
-        throwexception("bad operand for unary minus");
+    gcaddroot(operand);
+    object *result = NULL;
+    if (e->op == TOKNOT) result = makebool(!istruthy(operand));
+    else if (e->op == TOKMINUS) {
+        if (operand->type == 0) result = makeint(-operand->ival);
+        else if (operand->type == 1) result = makefloat(-operand->fval);
+        else {
+            gcremoveroot(operand);
+            throwexception("bad operand for unary minus");
+            return NULL;
+        }
+    } else {
+        gcremoveroot(operand);
+        throwexception("unknown unary operator");
+        return NULL;
     }
-    throwexception("unknown unary operator");
-    return NULL;
+    gcremoveroot(operand);
+    return result;
 }
 
 static object *evalident(identexpr *e, environment *env) {
@@ -232,66 +250,100 @@ static object *evalbool(boolexpr *e, environment *env) {
 
 static object *evalcall(callexpr *e, environment *env) {
     object *self = NULL;
-    if (e->callee->type == EXPR_ATTR) {
+    if (e->callee->type == exprattr) {
         self = evalexpr(((attribexpr*)e->callee)->target, env);
+        gcaddroot(self);
     }
     object *callee = evalexpr(e->callee, env);
+    gcaddroot(callee);
     if (!callee) throwexception("call on undefined");
     object **args = malloc(sizeof(object*) * (e->args->count + 1));
     for (int i = 0; i < e->args->count; i++) {
         args[i] = evalexpr(e->args->items[i], env);
+        gcaddroot(args[i]);
     }
     object *result = callfunc(callee, args, e->args->count, env, self);
+    for (int i = e->args->count - 1; i >= 0; i--) gcremoveroot(args[i]);
+    gcremoveroot(callee);
+    if (self) gcremoveroot(self);
     free(args);
     return result;
 }
 
 static object *evalindex(indexexpr *e, environment *env) {
     object *target = evalexpr(e->target, env);
+    gcaddroot(target);
     object *idx = evalexpr(e->index, env);
+    gcaddroot(idx);
+    object *result = NULL;
     if (target->type == 5) {
-        if (idx->type != 0) throwexception("list index must be integer");
+        if (idx->type != 0) {
+            gcremoveroot(target); gcremoveroot(idx);
+            throwexception("list index must be integer");
+            return NULL;
+        }
         long i = idx->ival;
         if (i < 0) i = target->list.count + i;
-        if (i < 0 || i >= target->list.count) throwexception("index out of range");
-        return target->list.items[i];
-    }
-    if (target->type == 6) {
-        object *val = dictget(target, idx);
-        if (!val) throwexception("key not found");
-        return val;
-    }
-    if (target->type == 2) {
-        if (idx->type != 0) throwexception("string index must be integer");
+        if (i < 0 || i >= target->list.count) {
+            gcremoveroot(target); gcremoveroot(idx);
+            throwexception("index out of range");
+            return NULL;
+        }
+        result = target->list.items[i];
+    } else if (target->type == 6) {
+        result = dictget(target, idx);
+        if (!result) {
+            gcremoveroot(target); gcremoveroot(idx);
+            throwexception("key not found");
+            return NULL;
+        }
+    } else if (target->type == 2) {
+        if (idx->type != 0) {
+            gcremoveroot(target); gcremoveroot(idx);
+            throwexception("string index must be integer");
+            return NULL;
+        }
         long i = idx->ival;
         if (i < 0) i = strlen(target->sval) + i;
-        if (i < 0 || i >= (long)strlen(target->sval)) throwexception("index out of range");
+        if (i < 0 || i >= (long)strlen(target->sval)) {
+            gcremoveroot(target); gcremoveroot(idx);
+            throwexception("index out of range");
+            return NULL;
+        }
         char c = target->sval[i];
         char buf[2] = {c, 0};
-        return makestring(buf);
+        result = makestring(buf);
+    } else {
+        gcremoveroot(target);
+        gcremoveroot(idx);
+        throwexception("cannot index");
+        return NULL;
     }
-    throwexception("cannot index");
-    return NULL;
+    gcremoveroot(target);
+    gcremoveroot(idx);
+    return result;
 }
 
 static object *evalattr(attribexpr *e, environment *env) {
     object *target = evalexpr(e->target, env);
+    gcaddroot(target);
+    object *result = NULL;
     if (target->type == 9 && target->klass.attrs) {
-        object *val = envget((environment*)target->klass.attrs, e->attr);
-        if (val) return val;
+        result = envget((environment*)target->klass.attrs, e->attr);
+        if (result) { gcremoveroot(target); return result; }
     }
     if (target->type == 10 && target->instance.attrs) {
-        object *val = envget((environment*)target->instance.attrs, e->attr);
-        if (val) return val;
-        if (target->instance.klass && target->instance.klass->klass.attrs) {
-            val = envget((environment*)target->instance.klass->klass.attrs, e->attr);
-            if (val) return val;
+        result = envget((environment*)target->instance.attrs, e->attr);
+        if (!result && target->instance.klass && target->instance.klass->klass.attrs) {
+            result = envget((environment*)target->instance.klass->klass.attrs, e->attr);
         }
+        if (result) { gcremoveroot(target); return result; }
     }
     if (target->type == 12 && target->module.exports) {
-        object *val = envget((environment*)target->module.exports, e->attr);
-        if (val) return val;
+        result = envget((environment*)target->module.exports, e->attr);
+        if (result) { gcremoveroot(target); return result; }
     }
+    gcremoveroot(target);
     char msg[256];
     snprintf(msg, sizeof(msg), "attribute '%s' not found", e->attr);
     throwexception(msg);
@@ -300,78 +352,93 @@ static object *evalattr(attribexpr *e, environment *env) {
 
 static object *evalassign(assignexpr *e, environment *env) {
     object *val = evalexpr(e->value, env);
+    gcaddroot(val);
     expr *t = e->target;
-    if (t->type == EXPR_IDENT) {
+    object *target = NULL;
+    object *idx = NULL;
+    if (t->type == exprident) {
         envupdate(env, ((identexpr*)t)->name, val);
-        return val;
-    }
-    if (t->type == EXPR_ATTR) {
+    } else if (t->type == exprattr) {
         attribexpr *a = (attribexpr*)t;
-        object *target = evalexpr(a->target, env);
+        target = evalexpr(a->target, env);
+        gcaddroot(target);
         if (target->type == 10) {
             if (!target->instance.attrs) target->instance.attrs = envnew(NULL);
             envset((environment*)target->instance.attrs, a->attr, val, 0);
-            return val;
-        }
-        if (target->type == 9) {
+        } else if (target->type == 9) {
             if (!target->klass.attrs) target->klass.attrs = envnew(NULL);
             envset((environment*)target->klass.attrs, a->attr, val, 0);
-            return val;
-        }
-        if (target->type == 12) {
+        } else if (target->type == 12) {
             if (!target->module.exports) target->module.exports = envnew(NULL);
             envset((environment*)target->module.exports, a->attr, val, 0);
-            return val;
+        } else {
+            gcremoveroot(val);
+            gcremoveroot(target);
+            throwexception("cannot set attribute on this type");
+            return NULL;
         }
-        throwexception("cannot set attribute on this type");
-        return NULL;
-    }
-    if (t->type == EXPR_INDEX) {
+    } else if (t->type == exprindex) {
         indexexpr *ix = (indexexpr*)t;
-        object *target = evalexpr(ix->target, env);
-        object *idx = evalexpr(ix->index, env);
+        target = evalexpr(ix->target, env);
+        gcaddroot(target);
+        idx = evalexpr(ix->index, env);
+        gcaddroot(idx);
         if (target->type == 5) {
-            if (idx->type != 0) throwexception("list index must be integer");
+            if (idx->type != 0) {
+                gcremoveroot(val); gcremoveroot(target); gcremoveroot(idx);
+                throwexception("list index must be integer");
+                return NULL;
+            }
             listset(target, idx->ival, val);
-            return val;
-        }
-        if (target->type == 6) {
+        } else if (target->type == 6) {
             dictset(target, idx, val);
-            return val;
+        } else {
+            gcremoveroot(val);
+            gcremoveroot(target);
+            gcremoveroot(idx);
+            throwexception("cannot index-assign this type");
+            return NULL;
         }
-        throwexception("cannot index-assign this type");
+    } else {
+        gcremoveroot(val);
+        throwexception("invalid assignment target");
         return NULL;
     }
-    throwexception("invalid assignment target");
-    return NULL;
+    if (target) gcremoveroot(target);
+    if (idx) gcremoveroot(idx);
+    gcremoveroot(val);
+    return val;
 }
 
 static object *evalexpr(expr *e, environment *env) {
     switch (e->type) {
-        case EXPR_BINARY: return evalbinary((binaryexpr*)e, env);
-        case EXPR_UNARY:  return evalunary((unaryexpr*)e, env);
-        case EXPR_IDENT:  return evalident((identexpr*)e, env);
-        case EXPR_NUMBER: return evalnumber((numberexpr*)e, env);
-        case EXPR_STRING: return evalstring((stringexpr*)e, env);
-        case EXPR_BOOL:   return evalbool((boolexpr*)e, env);
-        case EXPR_NONE:   return makenone();
-        case EXPR_CALL:   return evalcall((callexpr*)e, env);
-        case EXPR_INDEX:  return evalindex((indexexpr*)e, env);
-        case EXPR_ATTR:   return evalattr((attribexpr*)e, env);
-        case EXPR_FN: {
+        case exprbinary: return evalbinary((binaryexpr*)e, env);
+        case exprunary:  return evalunary((unaryexpr*)e, env);
+        case exprident:  return evalident((identexpr*)e, env);
+        case exprnumber: return evalnumber((numberexpr*)e, env);
+        case exprstring: return evalstring((stringexpr*)e, env);
+        case exprbool:   return evalbool((boolexpr*)e, env);
+        case exprnone:   return makenone();
+        case exprcall:   return evalcall((callexpr*)e, env);
+        case exprindex:  return evalindex((indexexpr*)e, env);
+        case exprattr:   return evalattr((attribexpr*)e, env);
+        case exprfn: {
             fnexp *f = ((fnextexpr*)e)->fn;
             return makefunc(f->params, NULL, f->pcount, (stmt**)f->body->items, f->body->count, env, f->name ? f->name : "anonymous", 0, 0);
         }
-        case EXPR_CLASS: {
+        case exprclass: {
             classexp *c = ((classexpr*)e)->cls;
             environment *classenv = envnew(env);
+            gcaddrootenv(classenv);
             for (int i = 0; i < c->body->count; i++) {
                 evalstmt(c->body->items[i], classenv);
             }
-            return makeclass(c->name ? c->name : "anonymous", classenv, NULL);
+            object *klass = makeclass(c->name ? c->name : "anonymous", classenv, NULL);
+            gcremoverootenv(classenv);
+            return klass;
         }
-        case EXPR_ASSIGN: return evalassign((assignexpr*)e, env);
-        case EXPR_LIST: {
+        case exprassign: return evalassign((assignexpr*)e, env);
+        case exprlistlit: {
             listexpr *le = (listexpr*)e;
             object *list = makelist();
             gcaddroot(list);
@@ -381,7 +448,7 @@ static object *evalexpr(expr *e, environment *env) {
             gcremoveroot(list);
             return list;
         }
-        case EXPR_DICT: {
+        case exprdict: {
             dictexpr *de = (dictexpr*)e;
             object *dict = makedict();
             gcaddroot(dict);
@@ -418,25 +485,31 @@ static object *evalreturn(returnexpr *s, environment *env) {
 static object *evalif(ifexpr *s, environment *env) {
     if (istruthy(evalexpr(s->cond, env))) {
         environment *blockenv = envnew(env);
+        gcaddrootenv(blockenv);
         for (int i = 0; i < s->body->count; i++) {
             evalstmt(s->body->items[i], blockenv);
         }
+        gcremoverootenv(blockenv);
         return makenone();
     }
     for (int i = 0; i < s->elifcount; i++) {
         if (istruthy(evalexpr(s->elifs[i].cond, env))) {
             environment *blockenv = envnew(env);
+            gcaddrootenv(blockenv);
             for (int j = 0; j < s->elifs[i].body->count; j++) {
                 evalstmt(s->elifs[i].body->items[j], blockenv);
             }
+            gcremoverootenv(blockenv);
             return makenone();
         }
     }
     if (s->elsebody) {
         environment *blockenv = envnew(env);
+        gcaddrootenv(blockenv);
         for (int i = 0; i < s->elsebody->count; i++) {
             evalstmt(s->elsebody->items[i], blockenv);
         }
+        gcremoverootenv(blockenv);
     }
     return makenone();
 }
@@ -444,44 +517,59 @@ static object *evalif(ifexpr *s, environment *env) {
 static object *evalwhile(whileexpr *s, environment *env) {
     while (istruthy(evalexpr(s->cond, env))) {
         environment *blockenv = envnew(env);
+        gcaddrootenv(blockenv);
         for (int i = 0; i < s->body->count; i++) {
             evalstmt(s->body->items[i], blockenv);
         }
+        gcremoverootenv(blockenv);
     }
     return makenone();
 }
 
 static object *evalfor(forexp *s, environment *env) {
     object *iterable = evalexpr(s->iter, env);
-    object *list = NULL;
+    gcaddroot(iterable);
     if (iterable->type == 11) {
-        list = makelist();
-        gcaddroot(list);
-        for (long i = iterable->range.start; i < iterable->range.stop; i += iterable->range.step) {
-            listappend(list, makeint(i));
+        long rstart = iterable->range.start;
+        long rstop = iterable->range.stop;
+        long rstep = iterable->range.step;
+        for (long i = rstart; i < rstop; i += rstep) {
+            environment *blockenv = envnew(env);
+            gcaddrootenv(blockenv);
+            envset(blockenv, s->var, makeint(i), 0);
+            for (int j = 0; j < s->body->count; j++) {
+                evalstmt(s->body->items[j], blockenv);
+            }
+            gcremoverootenv(blockenv);
         }
     } else if (iterable->type == 5) {
-        list = iterable;
+        for (int i = 0; i < iterable->list.count; i++) {
+            environment *blockenv = envnew(env);
+            gcaddrootenv(blockenv);
+            envset(blockenv, s->var, iterable->list.items[i], 0);
+            for (int j = 0; j < s->body->count; j++) {
+                evalstmt(s->body->items[j], blockenv);
+            }
+            gcremoverootenv(blockenv);
+        }
     } else if (iterable->type == 2) {
-        list = makelist();
-        gcaddroot(list);
-        for (int i = 0; iterable->sval[i]; i++) {
-            char buf[2] = {iterable->sval[i], 0};
-            listappend(list, makestring(buf));
+        int slen = (int)strlen(iterable->sval);
+        for (int i = 0; i < slen; i++) {
+            environment *blockenv = envnew(env);
+            gcaddrootenv(blockenv);
+            char cbuf[2] = {iterable->sval[i], 0};
+            envset(blockenv, s->var, makestring(cbuf), 0);
+            for (int j = 0; j < s->body->count; j++) {
+                evalstmt(s->body->items[j], blockenv);
+            }
+            gcremoverootenv(blockenv);
         }
     } else {
+        gcremoveroot(iterable);
         throwexception("for loop expects iterable");
         return NULL;
     }
-    int isnew = (iterable->type != 5);
-    for (int i = 0; i < list->list.count; i++) {
-        environment *blockenv = envnew(env);
-        envset(blockenv, s->var, list->list.items[i], 0);
-        for (int j = 0; j < s->body->count; j++) {
-            evalstmt(s->body->items[j], blockenv);
-        }
-    }
-    if (isnew) gcremoveroot(list);
+    gcremoveroot(iterable);
     return makenone();
 }
 
@@ -507,19 +595,29 @@ static object *evaltry(tryexpr *s, environment *env) {
     frame *oldframe = currentframe;
     currentframe = &f;
     object *result = makenone();
+    environment *blockenv = NULL;
     if (setjmp(f.jump) == 0) {
-        environment *blockenv = envnew(env);
+        blockenv = envnew(env);
+        gcaddrootenv(blockenv);
         for (int i = 0; i < s->body->count; i++) {
             evalstmt(s->body->items[i], blockenv);
         }
+        gcremoverootenv(blockenv);
+        blockenv = NULL;
     } else {
+        if (blockenv) {
+            gcremoverootenv(blockenv);
+            blockenv = NULL;
+        }
         object *ex = catchexception();
         if (s->catchbody) {
             environment *catchenv = envnew(env);
+            gcaddrootenv(catchenv);
             if (s->catchvar) envset(catchenv, s->catchvar, ex, 0);
             for (int i = 0; i < s->catchbody->count; i++) {
                 evalstmt(s->catchbody->items[i], catchenv);
             }
+            gcremoverootenv(catchenv);
         } else {
             currentframe = oldframe;
             if (ex && ex->type == 2) throwexception(ex->sval);
@@ -528,9 +626,11 @@ static object *evaltry(tryexpr *s, environment *env) {
     }
     if (s->finallybody) {
         environment *finenv = envnew(env);
+        gcaddrootenv(finenv);
         for (int i = 0; i < s->finallybody->count; i++) {
             evalstmt(s->finallybody->items[i], finenv);
         }
+        gcremoverootenv(finenv);
     }
     currentframe = oldframe;
     return result;
@@ -549,18 +649,18 @@ static object *evalexprstmt(exprstmt *s, environment *env) {
 
 static object *evalstmt(stmt *s, environment *env) {
     switch (s->type) {
-        case STMT_LET:     return evallet((letexpr*)s, env);
-        case STMT_RETURN:  return evalreturn((returnexpr*)s, env);
-        case STMT_IF:      return evalif((ifexpr*)s, env);
-        case STMT_WHILE:   return evalwhile((whileexpr*)s, env);
-        case STMT_FOR:     return evalfor((forexp*)s, env);
-        case STMT_BREAK:   return makenone();
-        case STMT_NEXT:    return makenone();
-        case STMT_FN:      return evalfn((fnexp*)s, env);
-        case STMT_CLASS:   return evalclass((classexp*)s, env);
-        case STMT_EXPR:    return evalexprstmt((exprstmt*)s, env);
-        case STMT_TRY:     return evaltry((tryexpr*)s, env);
-        case STMT_THROW:   return evalthrow((throwexpr*)s, env);
+        case stmtlet:     return evallet((letexpr*)s, env);
+        case stmtreturn:  return evalreturn((returnexpr*)s, env);
+        case stmtif:      return evalif((ifexpr*)s, env);
+        case stmtwhile:   return evalwhile((whileexpr*)s, env);
+        case stmtfor:     return evalfor((forexp*)s, env);
+        case stmtbreak:   return makenone();
+        case stmtnext:    return makenone();
+        case stmtfn:      return evalfn((fnexp*)s, env);
+        case stmtclass:   return evalclass((classexp*)s, env);
+        case stmtexpr:    return evalexprstmt((exprstmt*)s, env);
+        case stmttry:     return evaltry((tryexpr*)s, env);
+        case stmtthrow:   return evalthrow((throwexpr*)s, env);
     }
     throwexception("unknown statement");
     return NULL;
@@ -578,6 +678,9 @@ object *callfunc(object *fn, object **args, int argc, environment *env, object *
             return NULL;
         }
         environment *callenv = envnew(fn->func.closure);
+        size_t rootdepth = gcrootscount();
+        size_t envrootdepth = gcrootenvscount();
+        gcaddrootenv(callenv);
         for (int i = 0; i < argc; i++) {
             envset(callenv, fn->func.params[i], args[i], 0);
         }
@@ -588,16 +691,18 @@ object *callfunc(object *fn, object **args, int argc, environment *env, object *
         currentframe = &f;
         f.result = makenone();
         f.file = fn->func.name;
-        object *result = makenone();
-        gcaddroot(result);
+        object *placeholder = makenone();
+        gcaddroot(placeholder);
         if (setjmp(f.jump) == 0) {
             for (int i = 0; i < fn->func.bcount; i++) {
                 evalstmt(fn->func.body[i], callenv);
             }
-        } else {
-            result = f.result;
         }
-        gcremoveroot(result);
+        object *result = f.result;
+        gcremoveroot(placeholder);
+        gcremoverootenv(callenv);
+        gctruncroots(rootdepth);
+        gctruncrootenvs(envrootdepth);
         currentframe = oldframe;
         return result;
     }
