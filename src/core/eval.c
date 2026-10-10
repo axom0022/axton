@@ -131,6 +131,22 @@ typedef struct classexp {
     stmtlist *body;
 } classexp;
 
+typedef struct fnextexpr {
+    expr base;
+    fnexp *fn;
+} fnextexpr;
+
+typedef struct classexpr {
+    expr base;
+    classexp *cls;
+} classexpr;
+
+typedef struct assignexpr {
+    expr base;
+    expr *target;
+    expr *value;
+} assignexpr;
+
 typedef struct exprstmt {
     stmt base;
     expr *expression;
@@ -160,6 +176,8 @@ static object *evalbinary(binaryexpr *e, environment *env) {
         case TOKMINUS: return subvalues(left, right);
         case TOKSTAR: return mulvalues(left, right);
         case TOKSLASH: return divvalues(left, right);
+        case TOKPERCENT: return modvalues(left, right);
+        case TOKPOWER: return powvalues(left, right);
         case TOKEQEQ: return makebool(valuesequal(left, right));
         case TOKNE: return makebool(!valuesequal(left, right));
         case TOKLT: return makebool(lessthan(left, right));
@@ -213,13 +231,17 @@ static object *evalbool(boolexpr *e, environment *env) {
 }
 
 static object *evalcall(callexpr *e, environment *env) {
+    object *self = NULL;
+    if (e->callee->type == EXPR_ATTR) {
+        self = evalexpr(((attribexpr*)e->callee)->target, env);
+    }
     object *callee = evalexpr(e->callee, env);
     if (!callee) throwexception("call on undefined");
     object **args = malloc(sizeof(object*) * (e->args->count + 1));
     for (int i = 0; i < e->args->count; i++) {
         args[i] = evalexpr(e->args->items[i], env);
     }
-    object *result = callfunc(callee, args, e->args->count, env);
+    object *result = callfunc(callee, args, e->args->count, env, self);
     free(args);
     return result;
 }
@@ -276,6 +298,54 @@ static object *evalattr(attribexpr *e, environment *env) {
     return NULL;
 }
 
+static object *evalassign(assignexpr *e, environment *env) {
+    object *val = evalexpr(e->value, env);
+    expr *t = e->target;
+    if (t->type == EXPR_IDENT) {
+        envupdate(env, ((identexpr*)t)->name, val);
+        return val;
+    }
+    if (t->type == EXPR_ATTR) {
+        attribexpr *a = (attribexpr*)t;
+        object *target = evalexpr(a->target, env);
+        if (target->type == 10) {
+            if (!target->instance.attrs) target->instance.attrs = envnew(NULL);
+            envset((environment*)target->instance.attrs, a->attr, val, 0);
+            return val;
+        }
+        if (target->type == 9) {
+            if (!target->klass.attrs) target->klass.attrs = envnew(NULL);
+            envset((environment*)target->klass.attrs, a->attr, val, 0);
+            return val;
+        }
+        if (target->type == 12) {
+            if (!target->module.exports) target->module.exports = envnew(NULL);
+            envset((environment*)target->module.exports, a->attr, val, 0);
+            return val;
+        }
+        throwexception("cannot set attribute on this type");
+        return NULL;
+    }
+    if (t->type == EXPR_INDEX) {
+        indexexpr *ix = (indexexpr*)t;
+        object *target = evalexpr(ix->target, env);
+        object *idx = evalexpr(ix->index, env);
+        if (target->type == 5) {
+            if (idx->type != 0) throwexception("list index must be integer");
+            listset(target, idx->ival, val);
+            return val;
+        }
+        if (target->type == 6) {
+            dictset(target, idx, val);
+            return val;
+        }
+        throwexception("cannot index-assign this type");
+        return NULL;
+    }
+    throwexception("invalid assignment target");
+    return NULL;
+}
+
 static object *evalexpr(expr *e, environment *env) {
     switch (e->type) {
         case EXPR_BINARY: return evalbinary((binaryexpr*)e, env);
@@ -288,6 +358,19 @@ static object *evalexpr(expr *e, environment *env) {
         case EXPR_CALL:   return evalcall((callexpr*)e, env);
         case EXPR_INDEX:  return evalindex((indexexpr*)e, env);
         case EXPR_ATTR:   return evalattr((attribexpr*)e, env);
+        case EXPR_FN: {
+            fnexp *f = ((fnextexpr*)e)->fn;
+            return makefunc(f->params, NULL, f->pcount, (stmt**)f->body->items, f->body->count, env, f->name ? f->name : "anonymous", 0, 0);
+        }
+        case EXPR_CLASS: {
+            classexp *c = ((classexpr*)e)->cls;
+            environment *classenv = envnew(env);
+            for (int i = 0; i < c->body->count; i++) {
+                evalstmt(c->body->items[i], classenv);
+            }
+            return makeclass(c->name ? c->name : "anonymous", classenv, NULL);
+        }
+        case EXPR_ASSIGN: return evalassign((assignexpr*)e, env);
         case EXPR_LIST: {
             listexpr *le = (listexpr*)e;
             object *list = makelist();
@@ -420,6 +503,7 @@ static object *evalclass(classexp *s, environment *env) {
 
 static object *evaltry(tryexpr *s, environment *env) {
     frame f;
+    memset(&f, 0, sizeof(f));
     frame *oldframe = currentframe;
     currentframe = &f;
     object *result = makenone();
@@ -482,7 +566,7 @@ static object *evalstmt(stmt *s, environment *env) {
     return NULL;
 }
 
-object *callfunc(object *fn, object **args, int argc, environment *env) {
+object *callfunc(object *fn, object **args, int argc, environment *env, object *self) {
     if (fn->type == 8) {
         return fn->builtin.fn(args, argc, env);
     }
@@ -497,7 +581,9 @@ object *callfunc(object *fn, object **args, int argc, environment *env) {
         for (int i = 0; i < argc; i++) {
             envset(callenv, fn->func.params[i], args[i], 0);
         }
+        if (self) envset(callenv, "this", self, 0);
         frame f;
+        memset(&f, 0, sizeof(f));
         frame *oldframe = currentframe;
         currentframe = &f;
         f.result = makenone();
@@ -520,7 +606,7 @@ object *callfunc(object *fn, object **args, int argc, environment *env) {
         gcaddroot(inst);
         object *init = envget(fn->klass.attrs, "init");
         if (init && init->type == 7) {
-            callfunc(init, args, argc, fn->klass.attrs);
+            callfunc(init, args, argc, fn->klass.attrs, inst);
         }
         gcremoveroot(inst);
         return inst;
