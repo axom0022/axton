@@ -1,6 +1,13 @@
 #ifndef platform_h
 #define platform_h
 
+typedef struct object object;
+
+object *makedict(void);
+object *makestring(char *v);
+void dictset(object *dict, object *key, object *val);
+void listappend(object *list, object *item);
+
 void platforminit(void);
 void platformlog(const char *msg);
 void platformsleep(double seconds);
