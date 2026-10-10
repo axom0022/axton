@@ -1,4 +1,5 @@
 #include "../core/axton.h"
+
 void register3dlib(environment *env) { (void)env; }
 void registerachievementslib(environment *env) { (void)env; }
 void registerailib(environment *env) { (void)env; }
@@ -92,7 +93,9 @@ void registerhapticlib(environment *env) { (void)env; }
 void registerhashlib(environment *env) { (void)env; }
 void registerhotreloadlib(environment *env) { (void)env; }
 void registerhttp3module(environment *env) { (void)env; }
+#ifndef AXTON_WEBLIB
 void registerhttplib(environment *env) { (void)env; }
+#endif
 void registeriaplib(environment *env) { (void)env; }
 void registeriklib(environment *env) { (void)env; }
 void registerimguilib(environment *env) { (void)env; }
@@ -183,7 +186,9 @@ void registerserviceloclib(environment *env) { (void)env; }
 void registersessionmodule(environment *env) { (void)env; }
 void registershadeditorlib(environment *env) { (void)env; }
 void registershieldmodule(environment *env) { (void)env; }
+#ifndef AXTON_WEBLIB
 void registersocket(environment *env) { (void)env; }
+#endif
 void registerspatialaudiolib(environment *env) { (void)env; }
 void registerssemodule(environment *env) { (void)env; }
 void registerssllib(environment *env) { (void)env; }
