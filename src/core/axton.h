@@ -1,5 +1,5 @@
-#ifndef axton_h
-#define axton_h
+#ifndef axtonh
+#define axtonh
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -77,7 +77,7 @@ typedef enum {
     TOKUNION, TOKOPTIONAL, TOKASYNCIO
 } toktype;
 
-/* lowercase token aliases for lexer.c (compat) */
+
 #define tokand TOKAND
 #define tokasync TOKASYNC
 #define tokawait TOKAWAIT
@@ -149,15 +149,15 @@ typedef struct node {
 
 typedef struct environment environment;
 typedef enum {
-    EXPR_BINARY, EXPR_UNARY, EXPR_IDENT, EXPR_NUMBER, EXPR_STRING,
-    EXPR_BOOL, EXPR_NONE, EXPR_CALL, EXPR_INDEX, EXPR_ATTR,
-    EXPR_LIST, EXPR_DICT, EXPR_FN, EXPR_CLASS, EXPR_ASSIGN
+    exprbinary, exprunary, exprident, exprnumber, exprstring,
+    exprbool, exprnone, exprcall, exprindex, exprattr,
+    exprlistlit, exprdict, exprfn, exprclass, exprassign
 } exprtype;
 
 typedef enum {
-    STMT_LET, STMT_RETURN, STMT_IF, STMT_WHILE, STMT_FOR,
-    STMT_BREAK, STMT_NEXT, STMT_FN, STMT_CLASS, STMT_EXPR,
-    STMT_TRY, STMT_THROW
+    stmtlet, stmtreturn, stmtif, stmtwhile, stmtfor,
+    stmtbreak, stmtnext, stmtfn, stmtclass, stmtexpr,
+    stmttry, stmtthrow
 } stmttype;
 
 typedef struct expr {
@@ -302,7 +302,7 @@ typedef struct object {
             void *function;
             int argcount;
             int rettype;
-            int *argtypes_code;
+            int *argtypescode;
         } ffiwrap;
         struct {
             void *handle;
@@ -580,6 +580,12 @@ extern platformapi platform;
 void gcinit(void);
 void gcaddroot(object *obj);
 void gcremoveroot(object *obj);
+void gcaddrootenv(environment *env);
+void gcremoverootenv(environment *env);
+void gctruncroots(size_t depth);
+void gctruncrootenvs(size_t depth);
+size_t gcrootscount(void);
+size_t gcrootenvscount(void);
 void gcrun(void);
 void gcmark(object *obj);
 void gcmarkenv(environment *env);
@@ -590,6 +596,7 @@ void envset(environment *env, char *name, object *val, int cnst);
 void envupdate(environment *env, char *name, object *val);
 object *envget(environment *env, char *name);
 environment *envfirst(void);
+environment **envlisthead(void);
 
 object *makeint(long v);
 object *makefloat(double v);
