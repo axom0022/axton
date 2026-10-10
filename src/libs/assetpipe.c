@@ -79,7 +79,7 @@ object *assetpipemodel(object **args, int argc, void *env) {
     return makenone();
 }
 
-void registerassetpip elib(environment *env) {
+void registerassetpipelib(environment *env) {
     object *mod = makemodule("assetpipe", NULL);
     envset(mod->module.exports, "create", makebuiltin(assetpipecreate), 0);
     envset(mod->module.exports, "scan", makebuiltin(assetpipescan), 0);
