@@ -2,19 +2,20 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 static void setnonblock(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-object *socketcreate(object **a, int c, void *e) {
+object *socketcreate(object **a, int c, environment *env) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) throwexception("socket failed");
     return makeint(fd);
 }
 
-object *socketconnect(object **a, int c, void *e) {
+object *socketconnect(object **a, int c, environment *env) {
     if (c < 3 || a[0]->type != 0 || a[1]->type != 2 || a[2]->type != 0)
         throwexception("connect needs fd host port");
     int fd = a[0]->ival;
@@ -31,7 +32,7 @@ object *socketconnect(object **a, int c, void *e) {
     return makeint(0);
 }
 
-object *socketsend(object **a, int c, void *e) {
+object *socketsend(object **a, int c, environment *env) {
     if (c < 2 || a[0]->type != 0 || a[1]->type != 2)
         throwexception("send needs fd and data");
     int fd = a[0]->ival;
@@ -40,7 +41,7 @@ object *socketsend(object **a, int c, void *e) {
     return makeint(sent);
 }
 
-object *socketrecv(object **a, int c, void *e) {
+object *socketrecv(object **a, int c, environment *env) {
     if (c < 2 || a[0]->type != 0 || a[1]->type != 0)
         throwexception("recv needs fd and size");
     int fd = a[0]->ival;
@@ -54,13 +55,13 @@ object *socketrecv(object **a, int c, void *e) {
     return res;
 }
 
-object *socketclose(object **a, int c, void *e) {
+object *socketclose(object **a, int c, environment *env) {
     if (c < 1 || a[0]->type != 0) throwexception("close needs fd");
     close(a[0]->ival);
     return makenone();
 }
 
-object *socketbind(object **a, int c, void *e) {
+object *socketbind(object **a, int c, environment *env) {
     if (c < 2 || a[0]->type != 0 || a[1]->type != 0)
         throwexception("bind needs fd and port");
     int fd = a[0]->ival;
@@ -74,13 +75,13 @@ object *socketbind(object **a, int c, void *e) {
     return makenone();
 }
 
-object *socketlisten(object **a, int c, void *e) {
+object *socketlisten(object **a, int c, environment *env) {
     if (c < 1 || a[0]->type != 0) throwexception("listen needs fd");
     if (listen(a[0]->ival, 10) < 0) throwexception("listen failed");
     return makenone();
 }
 
-object *socketaccept(object **a, int c, void *e) {
+object *socketaccept(object **a, int c, environment *env) {
     if (c < 1 || a[0]->type != 0) throwexception("accept needs fd");
     int fd = a[0]->ival;
     struct sockaddr_in client;
@@ -91,7 +92,7 @@ object *socketaccept(object **a, int c, void *e) {
     return makeint(clientfd);
 }
 
-void registersocketlib(environment *env) {
+void registersocket(environment *env) {
     object *mod = makemodule("socket", NULL);
     envset(mod->module.exports, "socket", makebuiltin(socketcreate), 0);
     envset(mod->module.exports, "connect", makebuiltin(socketconnect), 0);
