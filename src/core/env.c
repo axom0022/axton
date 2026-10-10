@@ -79,3 +79,24 @@ object *envget(environment *env, char *name) {
 environment *envfirst(void) {
     return allenvs;
 }
+
+void envupdate(environment *env, char *name, object *val) {
+    unsigned int h = strhash(name);
+    environment *e = env;
+    while (e) {
+        unsigned int mask = e->cap - 1;
+        unsigned int idx = h & mask;
+        unsigned int start = idx;
+        while (e->slots[idx].used) {
+            if (e->slots[idx].hash == h && strcmp(e->slots[idx].name, name) == 0) {
+                if (e->slots[idx].isconst) throwexception("cannot reassign constant");
+                e->slots[idx].value = val;
+                return;
+            }
+            idx = (idx + 1) & mask;
+            if (idx == start) break;
+        }
+        e = e->parent;
+    }
+    envset(env, name, val, 0);
+}
