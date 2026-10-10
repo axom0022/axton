@@ -1,14 +1,5 @@
 #include "axton.h"
 
-void listappend(object *list, object *item) {
-    if (list->type != 5) return;
-    if (list->list.count >= list->list.cap) {
-        list->list.cap *= 2;
-        list->list.items = realloc(list->list.items, sizeof(object*) * list->list.cap);
-    }
-    list->list.items[list->list.count++] = item;
-}
-
 object *listget(object *list, long idx) {
     if (list->type != 5) return NULL;
     if (idx < 0) idx = list->list.count + idx;
@@ -20,38 +11,6 @@ void listset(object *list, long idx, object *item) {
     if (list->type != 5) return;
     if (idx < 0) idx = list->list.count + idx;
     if (idx >= 0 && idx < list->list.count) list->list.items[idx] = item;
-}
-
-void dictset(object *dict, object *key, object *val) {
-    if (dict->type != 6) return;
-    for (int i = 0; i < dict->dict.count; i++) {
-        if (valuesequal(dict->dict.keyvals[i], key)) {
-            dict->dict.vals[i] = val;
-            return;
-        }
-    }
-    dict->dict.count++;
-    dict->dict.keys = realloc(dict->dict.keys, sizeof(char*) * dict->dict.count);
-    dict->dict.keyvals = realloc(dict->dict.keyvals, sizeof(object*) * dict->dict.count);
-    dict->dict.vals = realloc(dict->dict.vals, sizeof(object*) * dict->dict.count);
-    dict->dict.keyvals[dict->dict.count - 1] = key;
-    dict->dict.vals[dict->dict.count - 1] = val;
-}
-
-object *dictget(object *dict, object *key) {
-    if (dict->type != 6) return NULL;
-    for (int i = 0; i < dict->dict.count; i++) {
-        if (valuesequal(dict->dict.keyvals[i], key)) return dict->dict.vals[i];
-    }
-    return NULL;
-}
-
-int dicthas(object *dict, object *key) {
-    if (dict->type != 6) return 0;
-    for (int i = 0; i < dict->dict.count; i++) {
-        if (valuesequal(dict->dict.keyvals[i], key)) return 1;
-    }
-    return 0;
 }
 
 int istruthy(object *v) {
@@ -149,4 +108,26 @@ int greaterthan(object *a, object *b) {
     if (a->type == 2 && b->type == 2) return strcmp(a->sval, b->sval) > 0;
     throwexception("cannot compare");
     return 0;
+}
+
+object *modvalues(object *a, object *b) {
+    if (a->type == 0 && b->type == 0) {
+        if (b->ival == 0) throwexception("modulo by zero");
+        return makeint(a->ival % b->ival);
+    }
+    double x = a->type == 0 ? (double)a->ival : a->fval;
+    double y = b->type == 0 ? (double)b->ival : b->fval;
+    if (y == 0) throwexception("modulo by zero");
+    return makefloat(fmod(x, y));
+}
+
+object *powvalues(object *a, object *b) {
+    if (a->type == 0 && b->type == 0 && b->ival >= 0) {
+        long r = 1;
+        for (long i = 0; i < b->ival; i++) r *= a->ival;
+        return makeint(r);
+    }
+    double x = a->type == 0 ? (double)a->ival : a->fval;
+    double y = b->type == 0 ? (double)b->ival : b->fval;
+    return makefloat(pow(x, y));
 }
