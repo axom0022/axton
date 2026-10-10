@@ -252,8 +252,10 @@ object *builtinsorted(object **args, int argc, environment *env) {
     object *list = args[0];
     if (list->type != 5) throwexception("sorted expects list");
     object *result = makelist();
+    gcaddroot(result);
     for (int i = 0; i < list->list.count; i++) listappend(result, list->list.items[i]);
     listsort(result);
+    gcremoveroot(result);
     return result;
 }
 
@@ -262,12 +264,16 @@ object *builtinenumerate(object **args, int argc, environment *env) {
     object *list = args[0];
     if (list->type != 5) throwexception("enumerate expects list");
     object *result = makelist();
+    gcaddroot(result);
     for (int i = 0; i < list->list.count; i++) {
         object *pair = makelist();
+        gcaddroot(pair);
         listappend(pair, makeint(i));
         listappend(pair, list->list.items[i]);
         listappend(result, pair);
+        gcremoveroot(pair);
     }
+    gcremoveroot(result);
     return result;
 }
 
@@ -279,13 +285,17 @@ object *builtinzip(object **args, int argc, environment *env) {
         if (i == 0 || args[i]->list.count < minlen) minlen = args[i]->list.count;
     }
     object *result = makelist();
+    gcaddroot(result);
     for (int i = 0; i < minlen; i++) {
         object *group = makelist();
+        gcaddroot(group);
         for (int j = 0; j < argc; j++) {
             listappend(group, args[j]->list.items[i]);
         }
         listappend(result, group);
+        gcremoveroot(group);
     }
+    gcremoveroot(result);
     return result;
 }
 
@@ -294,10 +304,12 @@ object *builtinmap(object **args, int argc, environment *env) {
     if (args[0]->type != 7 && args[0]->type != 8) throwexception("first argument must be callable");
     if (args[1]->type != 5) throwexception("second argument must be list");
     object *result = makelist();
+    gcaddroot(result);
     for (int i = 0; i < args[1]->list.count; i++) {
         object *mapped = callfunc(args[0], &args[1]->list.items[i], 1, env, NULL);
         listappend(result, mapped);
     }
+    gcremoveroot(result);
     return result;
 }
 
@@ -306,10 +318,12 @@ object *builtinfilter(object **args, int argc, environment *env) {
     if (args[0]->type != 7 && args[0]->type != 8) throwexception("first argument must be callable");
     if (args[1]->type != 5) throwexception("second argument must be list");
     object *result = makelist();
+    gcaddroot(result);
     for (int i = 0; i < args[1]->list.count; i++) {
         object *filtered = callfunc(args[0], &args[1]->list.items[i], 1, env, NULL);
         if (istruthy(filtered)) listappend(result, args[1]->list.items[i]);
     }
+    gcremoveroot(result);
     return result;
 }
 
@@ -443,6 +457,7 @@ object *builtindir(object **args, int argc, environment *env) {
     if (argc < 1) throwexception("dir needs object");
     object *obj = args[0];
     object *result = makelist();
+    gcaddroot(result);
     if (obj->type == 9 && obj->klass.attrs) {
         environment *e = (environment*)obj->klass.attrs;
         for (int i = 0; i < e->cap; i++) {
@@ -455,6 +470,7 @@ object *builtindir(object **args, int argc, environment *env) {
             if (e->slots[i].used) listappend(result, makestring(e->slots[i].name));
         }
     }
+    gcremoveroot(result);
     return result;
 }
 
