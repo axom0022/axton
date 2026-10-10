@@ -85,7 +85,7 @@ static void runfile(char *path) {
         evalprogram(prog, globalenv);
     } else {
         object *ex = catchexception();
-        if (ex && ex->type == 2) {
+        if (ex && otype(ex) == 2) {
             platformlog("error: ");
             platformlog(ex->sval);
             platformlog("\n");
@@ -110,7 +110,7 @@ static int runinstall(int argc, char **argv) {
         evalprogram(prog, globalenv);
     } else {
         object *ex = catchexception();
-        if (ex && ex->type == 2) {
+        if (ex && otype(ex) == 2) {
             platformlog("error: ");
             platformlog(ex->sval);
             platformlog("\n");
@@ -141,7 +141,7 @@ static int rununinstall(int argc, char **argv) {
         evalprogram(prog, globalenv);
     } else {
         object *ex = catchexception();
-        if (ex && ex->type == 2) {
+        if (ex && otype(ex) == 2) {
             platformlog("error: ");
             platformlog(ex->sval);
             platformlog("\n");
@@ -167,13 +167,13 @@ void replstart(void) {
         currentframe = &frm;
         if (setjmp(frm.jump) == 0) {
             object *r = evalprogram(prog, globalenv);
-            if (r && r->type != 4) {
+            if (r && otype(r) != 4) {
                 object *one = r;
                 builtinprint(&one, 1, globalenv);
             }
         } else {
             object *ex = catchexception();
-            if (ex && ex->type == 2) {
+            if (ex && otype(ex) == 2) {
                 platformlog("error: ");
                 platformlog(ex->sval);
                 platformlog("\n");
