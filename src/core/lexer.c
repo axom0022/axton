@@ -172,7 +172,7 @@ static token nexttokenraw(void) {
     switch (c) {
         case '+': tok.type = tokplus; break;
         case '-': tok.type = tokminus; break;
-        case '*': tok.type = tokstar; break;
+        case '*': if (peekchar() == '*') { nextchar(); tok.type = tokpower; } else tok.type = tokstar; break;
         case '/': tok.type = tokslash; break;
         case '%': tok.type = tokpercent; break;
         case '=':
@@ -214,7 +214,7 @@ token *tokenize(char *src) {
     
     token *arr = malloc(sizeof(token) * 4096);
     int size = 0;
-    int lastline = 1;
+    int lastline = 0;
     
     while (1) {
         token tok = nexttokenraw();
@@ -251,6 +251,7 @@ token *tokenize(char *src) {
                 tok.type = tokdedent;
                 arr[size++] = tok;
             }
+            tok.type = tokeof;
             arr[size++] = tok;
             break;
         }
