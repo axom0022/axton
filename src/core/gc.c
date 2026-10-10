@@ -8,6 +8,9 @@ static size_t gcnext = 4096;
 static object **roots = NULL;
 static size_t rootcount = 0;
 static size_t rootcap = 0;
+static environment **envroots = NULL;
+static size_t envrootcount = 0;
+static size_t envrootcap = 0;
 
 extern environment *envfirst(void);
 extern environment *globalenv;
@@ -21,13 +24,13 @@ void gcinit(void) {
     roots = NULL;
     rootcount = 0;
     rootcap = 0;
+    envroots = NULL;
+    envrootcount = 0;
+    envrootcap = 0;
 }
 
 void gcaddroot(object *obj) {
     if (!obj) return;
-    for (size_t i = 0; i < rootcount; i++) {
-        if (roots[i] == obj) return;
-    }
     if (rootcount >= rootcap) {
         rootcap = rootcap ? rootcap * 2 : 1024;
         roots = realloc(roots, rootcap * sizeof(object*));
@@ -36,6 +39,11 @@ void gcaddroot(object *obj) {
 }
 
 void gcremoveroot(object *obj) {
+    if (!obj || rootcount == 0) return;
+    if (roots[rootcount - 1] == obj) {
+        rootcount--;
+        return;
+    }
     for (size_t i = 0; i < rootcount; i++) {
         if (roots[i] == obj) {
             roots[i] = roots[--rootcount];
@@ -44,12 +52,51 @@ void gcremoveroot(object *obj) {
     }
 }
 
+void gcaddrootenv(environment *env) {
+    if (!env) return;
+    if (envrootcount >= envrootcap) {
+        envrootcap = envrootcap ? envrootcap * 2 : 64;
+        envroots = realloc(envroots, envrootcap * sizeof(environment*));
+    }
+    envroots[envrootcount++] = env;
+}
+
+size_t gcrootscount(void) {
+    return rootcount;
+}
+
+size_t gcrootenvscount(void) {
+    return envrootcount;
+}
+
+void gctruncroots(size_t depth) {
+    if (rootcount > depth) rootcount = depth;
+}
+
+void gctruncrootenvs(size_t depth) {
+    if (envrootcount > depth) envrootcount = depth;
+}
+
+void gcremoverootenv(environment *env) {
+    if (!env || envrootcount == 0) return;
+    if (envroots[envrootcount - 1] == env) {
+        envrootcount--;
+        return;
+    }
+    for (size_t i = 0; i < envrootcount; i++) {
+        if (envroots[i] == env) {
+            envroots[i] = envroots[--envrootcount];
+            return;
+        }
+    }
+}
+
 object *gcalloc(int size) {
+    if (objcount > gcnext) gcrun();
     object *obj = calloc(1, size);
     obj->next = allobjects;
     allobjects = obj;
     objcount++;
-    if (objcount > gcnext) gcrun();
     return obj;
 }
 
@@ -79,9 +126,6 @@ void gcmark(object *obj) {
             break;
         case 7:
             gcmarkenv((environment*)obj->func.closure);
-            for (int i = 0; i < obj->func.bcount; i++) {
-                gcmark((object*)obj->func.body[i]);
-            }
             gcmark(obj->func.decorators);
             break;
         case 9:
@@ -110,21 +154,21 @@ void gcmark(object *obj) {
 }
 
 static void gcsweepenvs(void) {
-    environment *prev = NULL;
-    environment *env = envfirst();
+    environment **link = envlisthead();
+    environment *env = *link;
     while (env) {
         environment *next = env->next;
         if (env->marked) {
             env->marked = 0;
-            prev = env;
+            link = &env->next;
             env = next;
         } else {
-            if (prev) prev->next = next;
             for (int j = 0; j < env->cap; j++) {
                 if (env->slots[j].used) free(env->slots[j].name);
             }
             free(env->slots);
             free(env);
+            *link = next;
             env = next;
         }
     }
@@ -172,6 +216,7 @@ static void gcsweepobjects(void) {
 
 void gcrun(void) {
     for (size_t i = 0; i < rootcount; i++) gcmark(roots[i]);
+    for (size_t i = 0; i < envrootcount; i++) gcmarkenv(envroots[i]);
     if (globalenv) gcmarkenv(globalenv);
     object *cur = allobjects;
     while (cur) {
