@@ -1,10 +1,7 @@
 #include "axton.h"
 
 object *makeint(long v) {
-    object *obj = gcalloc(sizeof(object));
-    obj->type = 0;
-    obj->ival = v;
-    return obj;
+    return (object*)(((intptr_t)v << 1) | 1);
 }
 
 object *makefloat(double v) {
@@ -22,16 +19,11 @@ object *makestring(char *v) {
 }
 
 object *makebool(int v) {
-    object *obj = gcalloc(sizeof(object));
-    obj->type = 3;
-    obj->bval = v;
-    return obj;
+    return (object*)(((intptr_t)!!v << 2) | 2);
 }
 
 object *makenone(void) {
-    object *obj = gcalloc(sizeof(object));
-    obj->type = 4;
-    return obj;
+    return (object*)4;
 }
 
 object *makelist(void) {
@@ -50,6 +42,11 @@ object *makedict(void) {
     obj->dict.keys = malloc(sizeof(char*) * 4);
     obj->dict.keyvals = malloc(sizeof(object*) * 4);
     obj->dict.vals = malloc(sizeof(object*) * 4);
+    obj->dict.kcap = 16;
+    obj->dict.khash = malloc(sizeof(unsigned long) * 16);
+    obj->dict.kidx = malloc(sizeof(int) * 16);
+    for (int i = 0; i < 16; i++) obj->dict.kidx[i] = -1;
+    obj->dict.dcap = 4;
     return obj;
 }
 
@@ -176,7 +173,7 @@ object *makethread(object *func, object *args) {
 }
 
 void listappend(object *list, object *item) {
-    if (list->type != 5) return;
+    if (otype(list) != 5) return;
     if (list->list.count >= list->list.cap) {
         list->list.cap = list->list.cap ? list->list.cap * 2 : 4;
         list->list.items = realloc(list->list.items, sizeof(object*) * list->list.cap);
@@ -185,7 +182,7 @@ void listappend(object *list, object *item) {
 }
 
 object *listpop(object *list, int index) {
-    if (list->type != 5) return NULL;
+    if (otype(list) != 5) return NULL;
     if (index < 0) index = list->list.count + index;
     if (index < 0 || index >= list->list.count) return NULL;
     object *item = list->list.items[index];
@@ -197,7 +194,7 @@ object *listpop(object *list, int index) {
 }
 
 void listinsert(object *list, int index, object *item) {
-    if (list->type != 5) return;
+    if (otype(list) != 5) return;
     if (index < 0) index = 0;
     if (index > list->list.count) index = list->list.count;
     if (list->list.count >= list->list.cap) {
@@ -220,38 +217,81 @@ static int cmpobjects(const void *a, const void *b) {
 }
 
 void listsort(object *list) {
-    if (list->type != 5) return;
+    if (otype(list) != 5) return;
     qsort(list->list.items, list->list.count, sizeof(object*), cmpobjects);
 }
 
+static void dictgrowhash(object *dict) {
+    int ncap = dict->dict.kcap * 2;
+    unsigned long *nh = malloc(sizeof(unsigned long) * ncap);
+    int *ni = malloc(sizeof(int) * ncap);
+    for (int i = 0; i < ncap; i++) ni[i] = -1;
+    int mask = ncap - 1;
+    for (int e = 0; e < dict->dict.count; e++) {
+        unsigned long h = valhash(dict->dict.keyvals[e]);
+        int i = (int)(h & (unsigned long)mask);
+        while (ni[i] >= 0) i = (i + 1) & mask;
+        nh[i] = h;
+        ni[i] = e;
+    }
+    free(dict->dict.khash);
+    free(dict->dict.kidx);
+    dict->dict.khash = nh;
+    dict->dict.kidx = ni;
+    dict->dict.kcap = ncap;
+}
+
 void dictset(object *dict, object *key, object *val) {
-    if (dict->type != 6) return;
-    for (int i = 0; i < dict->dict.count; i++) {
-        if (valuesequal(dict->dict.keyvals[i], key)) {
-            dict->dict.vals[i] = val;
+    if (otype(dict) != 6) return;
+    unsigned long h = valhash(key);
+    int mask = dict->dict.kcap - 1;
+    int i = (int)(h & (unsigned long)mask);
+    while (dict->dict.kidx[i] >= 0) {
+        int e = dict->dict.kidx[i];
+        if (dict->dict.khash[i] == h && valuesequal(dict->dict.keyvals[e], key)) {
+            dict->dict.vals[e] = val;
             return;
         }
+        i = (i + 1) & mask;
+    }
+    if (dict->dict.count >= dict->dict.dcap) {
+        dict->dict.dcap = dict->dict.dcap * 2;
+        dict->dict.keys = realloc(dict->dict.keys, sizeof(char*) * dict->dict.dcap);
+        dict->dict.keyvals = realloc(dict->dict.keyvals, sizeof(object*) * dict->dict.dcap);
+        dict->dict.vals = realloc(dict->dict.vals, sizeof(object*) * dict->dict.dcap);
     }
     dict->dict.count++;
-    dict->dict.keys = realloc(dict->dict.keys, sizeof(char*) * dict->dict.count);
-    dict->dict.keyvals = realloc(dict->dict.keyvals, sizeof(object*) * dict->dict.count);
-    dict->dict.vals = realloc(dict->dict.vals, sizeof(object*) * dict->dict.count);
     dict->dict.keyvals[dict->dict.count - 1] = key;
     dict->dict.vals[dict->dict.count - 1] = val;
+    dict->dict.khash[i] = h;
+    dict->dict.kidx[i] = dict->dict.count - 1;
+    if (dict->dict.count * 4 >= dict->dict.kcap * 3) dictgrowhash(dict);
 }
 
 object *dictget(object *dict, object *key) {
-    if (dict->type != 6) return NULL;
-    for (int i = 0; i < dict->dict.count; i++) {
-        if (valuesequal(dict->dict.keyvals[i], key)) return dict->dict.vals[i];
+    if (otype(dict) != 6) return NULL;
+    unsigned long h = valhash(key);
+    int mask = dict->dict.kcap - 1;
+    int i = (int)(h & (unsigned long)mask);
+    while (dict->dict.kidx[i] >= 0) {
+        int e = dict->dict.kidx[i];
+        if (dict->dict.khash[i] == h && valuesequal(dict->dict.keyvals[e], key)) {
+            return dict->dict.vals[e];
+        }
+        i = (i + 1) & mask;
     }
     return NULL;
 }
 
 int dicthas(object *dict, object *key) {
-    if (dict->type != 6) return 0;
-    for (int i = 0; i < dict->dict.count; i++) {
-        if (valuesequal(dict->dict.keyvals[i], key)) return 1;
+    if (otype(dict) != 6) return 0;
+    unsigned long h = valhash(key);
+    int mask = dict->dict.kcap - 1;
+    int i = (int)(h & (unsigned long)mask);
+    while (dict->dict.kidx[i] >= 0) {
+        int e = dict->dict.kidx[i];
+        if (dict->dict.khash[i] == h && valuesequal(dict->dict.keyvals[e], key)) return 1;
+        i = (i + 1) & mask;
     }
     return 0;
 }
@@ -292,27 +332,27 @@ object *dictitems(object *dict) {
 }
 
 int hasattr(object *obj, char *name) {
-    if (obj->type == 9 && obj->klass.attrs) {
+    if (otype(obj) == 9 && obj->klass.attrs) {
         return envget((environment*)obj->klass.attrs, name) != NULL;
     }
-    if (obj->type == 10) {
+    if (otype(obj) == 10) {
         if (obj->instance.attrs && envget((environment*)obj->instance.attrs, name)) return 1;
         if (obj->instance.klass && obj->instance.klass->klass.attrs) {
             return envget((environment*)obj->instance.klass->klass.attrs, name) != NULL;
         }
     }
-    if (obj->type == 12 && obj->module.exports) {
+    if (otype(obj) == 12 && obj->module.exports) {
         return envget((environment*)obj->module.exports, name) != NULL;
     }
     return 0;
 }
 
 object *getattr(object *obj, char *name) {
-    if (obj->type == 9 && obj->klass.attrs) {
+    if (otype(obj) == 9 && obj->klass.attrs) {
         object *v = envget((environment*)obj->klass.attrs, name);
         if (v) return v;
     }
-    if (obj->type == 10) {
+    if (otype(obj) == 10) {
         if (obj->instance.attrs) {
             object *v = envget((environment*)obj->instance.attrs, name);
             if (v) return v;
@@ -322,7 +362,7 @@ object *getattr(object *obj, char *name) {
             if (v) return v;
         }
     }
-    if (obj->type == 12 && obj->module.exports) {
+    if (otype(obj) == 12 && obj->module.exports) {
         object *v = envget((environment*)obj->module.exports, name);
         if (v) return v;
     }
@@ -330,11 +370,11 @@ object *getattr(object *obj, char *name) {
 }
 
 void setattr(object *obj, char *name, object *val) {
-    if (obj->type == 10 && obj->instance.attrs) {
+    if (otype(obj) == 10 && obj->instance.attrs) {
         envset((environment*)obj->instance.attrs, name, val, 0);
         return;
     }
-    if (obj->type == 9 && obj->klass.attrs) {
+    if (otype(obj) == 9 && obj->klass.attrs) {
         envset((environment*)obj->klass.attrs, name, val, 0);
         return;
     }
