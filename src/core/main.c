@@ -79,6 +79,7 @@ static void runfile(char *path) {
         return;
     }
     frame frm;
+    memset(&frm, 0, sizeof(frm));
     currentframe = &frm;
     if (setjmp(frm.jump) == 0) {
         evalprogram(prog, globalenv);
@@ -103,6 +104,7 @@ static int runinstall(int argc, char **argv) {
     token *toks = tokenize(code);
     stmt *prog = parsetokens(toks, tcount);
     frame frm;
+    memset(&frm, 0, sizeof(frm));
     currentframe = &frm;
     if (setjmp(frm.jump) == 0) {
         evalprogram(prog, globalenv);
@@ -133,6 +135,7 @@ static int rununinstall(int argc, char **argv) {
     token *toks = tokenize(code);
     stmt *prog = parsetokens(toks, tcount);
     frame frm;
+    memset(&frm, 0, sizeof(frm));
     currentframe = &frm;
     if (setjmp(frm.jump) == 0) {
         evalprogram(prog, globalenv);
@@ -146,4 +149,35 @@ static int rununinstall(int argc, char **argv) {
         }
     }
     return 0;
+}
+
+extern object *builtinprint(object **args, int argc, environment *env);
+
+void replstart(void) {
+    platformlog("axton repl - ctrl-d to exit\n");
+    char line[4096];
+    while (fgets(line, sizeof(line), stdin)) {
+        if (line[0] == '\n') continue;
+        token *toks = tokenize(line);
+        if (!toks) continue;
+        stmt *prog = parsetokens(toks, tcount);
+        if (!prog) continue;
+        frame frm;
+    memset(&frm, 0, sizeof(frm));
+        currentframe = &frm;
+        if (setjmp(frm.jump) == 0) {
+            object *r = evalprogram(prog, globalenv);
+            if (r && r->type != 4) {
+                object *one = r;
+                builtinprint(&one, 1, globalenv);
+            }
+        } else {
+            object *ex = catchexception();
+            if (ex && ex->type == 2) {
+                platformlog("error: ");
+                platformlog(ex->sval);
+                platformlog("\n");
+            }
+        }
+    }
 }
