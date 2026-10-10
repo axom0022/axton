@@ -1,7 +1,6 @@
 #include "axton.h"
 #include <stdarg.h>
 
-static jmp_buf exceptionjump;
 static object *exvalue = NULL;
 static char exfile[256];
 static int exline = 0;
@@ -14,7 +13,9 @@ void throwexception(char *msg) {
         snprintf(fullmsg, sizeof(fullmsg), "%s", msg);
     }
     exvalue = makestring(fullmsg);
-    longjmp(exceptionjump, 1);
+    if (currentframe) longjmp(currentframe->jump, 1);
+    fprintf(stderr, "uncaught exception: %s\n", fullmsg);
+    exit(1);
 }
 
 void throwexceptiontype(char *type, char *msg) {
@@ -25,7 +26,9 @@ void throwexceptiontype(char *type, char *msg) {
         snprintf(full, sizeof(full), "%s: %s", type, msg);
     }
     exvalue = makestring(full);
-    longjmp(exceptionjump, 1);
+    if (currentframe) longjmp(currentframe->jump, 1);
+    fprintf(stderr, "uncaught exception: %s\n", full);
+    exit(1);
 }
 
 object *catchexception(void) {
