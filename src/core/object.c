@@ -77,7 +77,7 @@ object *makefunc(char **params, char **typehints, int pcount, stmt **body, int b
     return obj;
 }
 
-object *makebuiltin(void *(*fn)(object**, int, environment*)) {
+object *makebuiltin(object *(*fn)(object**, int, environment*)) {
     object *obj = gcalloc(sizeof(object));
     obj->type = 8;
     obj->builtin.fn = fn;
@@ -107,7 +107,6 @@ object *makemodule(char *name, void *handle) {
     obj->type = 12;
     obj->module.name = name ? strdup(name) : NULL;
     obj->module.exports = envnew(NULL);
-    obj->module.handle = handle;
     return obj;
 }
 
