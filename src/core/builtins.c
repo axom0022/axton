@@ -295,7 +295,7 @@ object *builtinmap(object **args, int argc, environment *env) {
     if (args[1]->type != 5) throwexception("second argument must be list");
     object *result = makelist();
     for (int i = 0; i < args[1]->list.count; i++) {
-        object *mapped = callfunc(args[0], &args[1]->list.items[i], 1, env);
+        object *mapped = callfunc(args[0], &args[1]->list.items[i], 1, env, NULL);
         listappend(result, mapped);
     }
     return result;
@@ -307,7 +307,7 @@ object *builtinfilter(object **args, int argc, environment *env) {
     if (args[1]->type != 5) throwexception("second argument must be list");
     object *result = makelist();
     for (int i = 0; i < args[1]->list.count; i++) {
-        object *filtered = callfunc(args[0], &args[1]->list.items[i], 1, env);
+        object *filtered = callfunc(args[0], &args[1]->list.items[i], 1, env, NULL);
         if (istruthy(filtered)) listappend(result, args[1]->list.items[i]);
     }
     return result;
@@ -321,7 +321,7 @@ object *builtinreduce(object **args, int argc, environment *env) {
     object *result = args[1]->list.items[0];
     for (int i = 1; i < args[1]->list.count; i++) {
         object *argslist[2] = {result, args[1]->list.items[i]};
-        result = callfunc(args[0], argslist, 2, env);
+        result = callfunc(args[0], argslist, 2, env, NULL);
     }
     return result;
 }
@@ -445,14 +445,14 @@ object *builtindir(object **args, int argc, environment *env) {
     object *result = makelist();
     if (obj->type == 9 && obj->klass.attrs) {
         environment *e = (environment*)obj->klass.attrs;
-        for (int i = 0; i < e->count; i++) {
-            listappend(result, makestring(e->names[i]));
+        for (int i = 0; i < e->cap; i++) {
+            if (e->slots[i].used) listappend(result, makestring(e->slots[i].name));
         }
     }
     if (obj->type == 10 && obj->instance.attrs) {
         environment *e = (environment*)obj->instance.attrs;
-        for (int i = 0; i < e->count; i++) {
-            listappend(result, makestring(e->names[i]));
+        for (int i = 0; i < e->cap; i++) {
+            if (e->slots[i].used) listappend(result, makestring(e->slots[i].name));
         }
     }
     return result;
@@ -485,7 +485,7 @@ object *builtinsuper(object **args, int argc, environment *env) {
     if (args[0]->type != 10) throwexception("super needs instance");
     object *cls = args[0]->instance.klass;
     if (cls->type != 9) throwexception("invalid class");
-    object *supercls = cls->klass.super;
+    object *supercls = cls->klass.bases;
     if (!supercls) supercls = envget(globalenv, "object");
     return supercls;
 }
@@ -574,7 +574,7 @@ object *builtinisinstance(object **args, int argc, environment *env) {
     object *cls = args[0]->instance.klass;
     while (cls) {
         if (cls == args[1]) return makebool(1);
-        cls = cls->klass.super;
+        cls = cls->klass.bases;
     }
     return makebool(0);
 }
@@ -585,7 +585,7 @@ object *builtinissubclass(object **args, int argc, environment *env) {
     object *cls = args[0];
     while (cls) {
         if (cls == args[1]) return makebool(1);
-        cls = cls->klass.super;
+        cls = cls->klass.bases;
     }
     return makebool(0);
 }
