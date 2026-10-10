@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <dlfcn.h>
+#include <sys/stat.h>
 
 #ifdef __linux__
 #include <sys/ptrace.h>
@@ -213,7 +215,6 @@ void platformbluetoothclose(int handle) {
 int platformprocessopen(int pid, int flags) {
     (void)flags;
 #ifdef __linux__
-    // attach with ptrace
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1) return -1;
     waitpid(pid, NULL, 0);
     return pid;
@@ -303,3 +304,7 @@ int platformprocesswrite(int handle, long address, unsigned char *buf, int size)
 void platformprocessclose(int handle) {}
 int platformprocessfind(const char *name) { return -1; }
 #endif
+
+void platformexit(int code) {
+    exit(code);
+}
