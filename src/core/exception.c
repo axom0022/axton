@@ -13,6 +13,7 @@ void throwexception(char *msg) {
         snprintf(fullmsg, sizeof(fullmsg), "%s", msg);
     }
     exvalue = makestring(fullmsg);
+    gcaddroot(exvalue);
     if (currentframe) longjmp(currentframe->jump, 1);
     fprintf(stderr, "uncaught exception: %s\n", fullmsg);
     exit(1);
@@ -26,6 +27,7 @@ void throwexceptiontype(char *type, char *msg) {
         snprintf(full, sizeof(full), "%s: %s", type, msg);
     }
     exvalue = makestring(full);
+    gcaddroot(exvalue);
     if (currentframe) longjmp(currentframe->jump, 1);
     fprintf(stderr, "uncaught exception: %s\n", full);
     exit(1);
@@ -34,6 +36,7 @@ void throwexceptiontype(char *type, char *msg) {
 object *catchexception(void) {
     object *val = exvalue;
     exvalue = NULL;
+    if (val) gcremoveroot(val);
     return val;
 }
 
