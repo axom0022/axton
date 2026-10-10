@@ -77,6 +77,64 @@ typedef enum {
     TOKUNION, TOKOPTIONAL, TOKASYNCIO
 } toktype;
 
+/* lowercase token aliases for lexer.c (compat) */
+#define tokand TOKAND
+#define tokasync TOKASYNC
+#define tokawait TOKAWAIT
+#define tokbreak TOKBREAK
+#define tokcatch TOKCATCH
+#define tokclass TOKCLASS
+#define tokcolon TOKCOLON
+#define tokcomma TOKCOMMA
+#define tokconst TOKCONST
+#define tokdedent TOKDEDENT
+#define tokdot TOKDOT
+#define tokelif TOKELIF
+#define tokelse TOKELSE
+#define tokeof TOKEOF
+#define tokeq TOKEQ
+#define tokeqeq TOKEQEQ
+#define tokfalse TOKFALSE
+#define tokfinally TOKFINALLY
+#define tokfn TOKFN
+#define tokfor TOKFOR
+#define tokge TOKGE
+#define tokgt TOKGT
+#define tokident TOKIDENT
+#define tokif TOKIF
+#define tokimport TOKIMPORT
+#define tokin TOKIN
+#define tokindent TOKINDENT
+#define toklbrace TOKLBRACE
+#define toklbracket TOKLBRACKET
+#define tokle TOKLE
+#define toklet TOKLET
+#define toklparen TOKLPAREN
+#define toklt TOKLT
+#define tokminus TOKMINUS
+#define tokne TOKNE
+#define toknewline TOKNEWLINE
+#define toknext TOKNEXT
+#define toknone TOKNONE
+#define toknot TOKNOT
+#define toknumber TOKNUMBER
+#define tokor TOKOR
+#define tokpercent TOKPERCENT
+#define tokpower TOKPOWER
+#define tokplus TOKPLUS
+#define tokrbrace TOKRBRACE
+#define tokrbracket TOKRBRACKET
+#define tokreturn TOKRETURN
+#define tokrparen TOKRPAREN
+#define tokslash TOKSLASH
+#define tokstar TOKSTAR
+#define tokstring TOKSTRING
+#define tokthrow TOKTHROW
+#define toktrue TOKTRUE
+#define tokwhile TOKWHILE
+#define tokyield TOKYIELD
+#define tokcry TOKTRY
+
 typedef struct token {
     toktype type;
     char *text;
@@ -89,10 +147,11 @@ typedef struct node {
     char *file;
 } node;
 
+typedef struct environment environment;
 typedef enum {
     EXPR_BINARY, EXPR_UNARY, EXPR_IDENT, EXPR_NUMBER, EXPR_STRING,
     EXPR_BOOL, EXPR_NONE, EXPR_CALL, EXPR_INDEX, EXPR_ATTR,
-    EXPR_LIST, EXPR_DICT
+    EXPR_LIST, EXPR_DICT, EXPR_FN, EXPR_CLASS, EXPR_ASSIGN
 } exprtype;
 
 typedef enum {
@@ -150,7 +209,7 @@ typedef struct object {
             struct object *decorators;
         } func;
         struct {
-            void *(*fn)(struct object**, int, void*);
+            struct object *(*fn)(struct object**, int, struct environment*);
         } builtin;
         struct {
             char *name;
@@ -528,6 +587,7 @@ object *gcalloc(int size);
 
 environment *envnew(environment *parent);
 void envset(environment *env, char *name, object *val, int cnst);
+void envupdate(environment *env, char *name, object *val);
 object *envget(environment *env, char *name);
 environment *envfirst(void);
 
@@ -540,7 +600,7 @@ object *makelist(void);
 object *makedict(void);
 object *makerange(long start, long stop, long step);
 object *makefunc(char **params, char **typehints, int pcount, stmt **body, int bcount, environment *closure, char *name, int isasync, int isgenerator);
-object *makebuiltin(void *(*fn)(object**, int, environment*));
+object *makebuiltin(object *(*fn)(object**, int, environment*));
 object *makeclass(char *name, environment *attrs, object *bases);
 object *makeinstance(object *klass, object **args, int argc);
 object *makemodule(char *name, void *handle);
@@ -588,6 +648,7 @@ object *makefile(FILE *f, int fd, int mode);
 object *makethread(object *func, object *args);
 
 void listappend(object *list, object *item);
+void listset(object *list, long idx, object *item);
 object *listpop(object *list, int index);
 void listinsert(object *list, int index, object *item);
 void listsort(object *list);
@@ -607,6 +668,8 @@ object *addvalues(object *a, object *b);
 object *subvalues(object *a, object *b);
 object *mulvalues(object *a, object *b);
 object *divvalues(object *a, object *b);
+object *modvalues(object *a, object *b);
+object *powvalues(object *a, object *b);
 int lessthan(object *a, object *b);
 int greaterthan(object *a, object *b);
 
@@ -618,7 +681,7 @@ void initexceptions(environment *env);
 token *tokenize(char *input);
 stmt *parsetokens(token *tokens, int count);
 object *evalprogram(stmt *program, environment *env);
-object *callfunc(object *fn, object **args, int argc, environment *env);
+object *callfunc(object *fn, object **args, int argc, environment *env, object *self);
 void registerbuiltins(environment *env);
 void registerstdlib(environment *env);
 void registeralllibs(environment *env);
@@ -850,7 +913,7 @@ void registerstructlib(environment *env);
 void registershutillib(environment *env);
 void registerstringlib(environment *env);
 void registerstatisticslib(environment *env);
-void registerio lib(environment *env);
+void registeriolib(environment *env);
 void registerbase64lib(environment *env);
 void registerbinasciilib(environment *env);
 void registercmathlib(environment *env);
