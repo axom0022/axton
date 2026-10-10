@@ -80,6 +80,10 @@ environment *envfirst(void) {
     return allenvs;
 }
 
+environment **envlisthead(void) {
+    return &allenvs;
+}
+
 void envupdate(environment *env, char *name, object *val) {
     unsigned int h = strhash(name);
     environment *e = env;
