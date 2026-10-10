@@ -2,6 +2,7 @@
 #define axtonh
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -173,6 +174,176 @@ typedef struct stmt {
     void *(*exec)(struct stmt*, void*);
 } stmt;
 
+typedef struct {
+    expr **items;
+    int count;
+} exprlist;
+
+typedef struct {
+    stmt **items;
+    int count;
+} stmtlist;
+
+typedef struct identexpr {
+    expr base;
+    char *name;
+} identexpr;
+
+typedef struct numberexpr {
+    expr base;
+    double value;
+} numberexpr;
+
+typedef struct stringexpr {
+    expr base;
+    char *value;
+} stringexpr;
+
+typedef struct boolexpr {
+    expr base;
+    int value;
+} boolexpr;
+
+typedef struct noneexpr {
+    expr base;
+} noneexpr;
+
+typedef struct binaryexpr {
+    expr base;
+    expr *left;
+    toktype op;
+    expr *right;
+} binaryexpr;
+
+typedef struct unaryexpr {
+    expr base;
+    toktype op;
+    expr *operand;
+} unaryexpr;
+
+typedef struct callexpr {
+    expr base;
+    expr *callee;
+    exprlist *args;
+} callexpr;
+
+typedef struct indexexpr {
+    expr base;
+    expr *target;
+    expr *index;
+} indexexpr;
+
+typedef struct attribexpr {
+    expr base;
+    expr *target;
+    char *attr;
+} attribexpr;
+
+typedef struct listexpr {
+    expr base;
+    expr **items;
+    int count;
+} listexpr;
+
+typedef struct dictexpr {
+    expr base;
+    expr **keys;
+    expr **values;
+    int count;
+} dictexpr;
+
+typedef struct letexpr {
+    stmt base;
+    char *name;
+    expr *value;
+    int isconst;
+} letexpr;
+
+typedef struct returnexpr {
+    stmt base;
+    expr *value;
+} returnexpr;
+
+typedef struct ifexpr {
+    stmt base;
+    expr *cond;
+    stmtlist *body;
+    struct { expr *cond; stmtlist *body; } *elifs;
+    int elifcount;
+    stmtlist *elsebody;
+} ifexpr;
+
+typedef struct whileexpr {
+    stmt base;
+    expr *cond;
+    stmtlist *body;
+} whileexpr;
+
+typedef struct forexp {
+    stmt base;
+    char *var;
+    expr *iter;
+    stmtlist *body;
+} forexp;
+
+typedef struct breakexp {
+    stmt base;
+} breakexp;
+
+typedef struct nextexp {
+    stmt base;
+} nextexp;
+
+typedef struct fnexp {
+    stmt base;
+    char *name;
+    char **params;
+    int pcount;
+    stmtlist *body;
+} fnexp;
+
+typedef struct classexp {
+    stmt base;
+    char *name;
+    stmtlist *body;
+} classexp;
+
+typedef struct fnextexpr {
+    expr base;
+    fnexp *fn;
+} fnextexpr;
+
+typedef struct classexpr {
+    expr base;
+    classexp *cls;
+} classexpr;
+
+typedef struct assignexpr {
+    expr base;
+    expr *target;
+    expr *value;
+} assignexpr;
+
+typedef struct exprstmt {
+    stmt base;
+    expr *expression;
+} exprstmt;
+
+typedef struct tryexpr {
+    stmt base;
+    stmtlist *body;
+    char *catchvar;
+    stmtlist *catchbody;
+    stmtlist *finallybody;
+} tryexpr;
+
+typedef struct throwexpr {
+    stmt base;
+    expr *value;
+} throwexpr;
+
+struct bytecode;
+
 typedef struct object {
     struct object *next;
     int marked;
@@ -195,6 +366,10 @@ typedef struct object {
             struct object **keyvals;
             struct object **vals;
             int count;
+            unsigned long *khash;
+            int *kidx;
+            int kcap;
+            int dcap;
         } dict;
         struct {
             char **params;
@@ -207,6 +382,8 @@ typedef struct object {
             int isasync;
             int isgenerator;
             struct object *decorators;
+            struct bytecode *code;
+            int slotcount;
         } func;
         struct {
             struct object *(*fn)(struct object**, int, struct environment*);
@@ -475,6 +652,18 @@ typedef struct object {
     };
 } object;
 
+static inline int isintval(object *o) { return ((intptr_t)o & 1) != 0; }
+static inline long getival(object *o) { return isintval(o) ? ((long)((intptr_t)o >> 1)) : o->ival; }
+static inline int isboolval(object *o) { return ((intptr_t)o & 3) == 2; }
+static inline int getbval(object *o) { return (int)(((intptr_t)o >> 2) & 1); }
+static inline int isnoneval(object *o) { return (intptr_t)o == 4; }
+static inline int otype(object *o) {
+    if (isintval(o)) return 0;
+    if (isboolval(o)) return 3;
+    if (isnoneval(o)) return 4;
+    return o->type;
+}
+
 typedef struct envslot {
     char *name;
     object *value;
@@ -490,7 +679,14 @@ typedef struct environment {
     struct environment *parent;
     struct environment *globals;
     struct environment *next;
+    struct environment *prev;
     int marked;
+    char **lnames;
+    object **lvals;
+    unsigned char *lconst;
+    int lcount;
+    int lownnames;
+    int lvcap;
 } environment;
 
 typedef struct {
@@ -578,6 +774,7 @@ extern int tcount;
 extern platformapi platform;
 
 void gcinit(void);
+void gcenvalloc(void);
 void gcaddroot(object *obj);
 void gcremoveroot(object *obj);
 void gcaddrootenv(environment *env);
@@ -595,6 +792,7 @@ environment *envnew(environment *parent);
 void envset(environment *env, char *name, object *val, int cnst);
 void envupdate(environment *env, char *name, object *val);
 object *envget(environment *env, char *name);
+void envrecycle(environment *env);
 environment *envfirst(void);
 environment **envlisthead(void);
 
@@ -671,6 +869,7 @@ void setattr(object *obj, char *name, object *val);
 
 int istruthy(object *v);
 int valuesequal(object *a, object *b);
+unsigned long valhash(object *v);
 object *addvalues(object *a, object *b);
 object *subvalues(object *a, object *b);
 object *mulvalues(object *a, object *b);
@@ -688,6 +887,17 @@ void initexceptions(environment *env);
 token *tokenize(char *input);
 stmt *parsetokens(token *tokens, int count);
 object *evalprogram(stmt *program, environment *env);
+object *evaltrystmt(stmt *s, environment *env);
+object *evalclassstmt(stmt *s, environment *env);
+object *evalclassexpr(stmt *s, environment *env);
+struct bytecode *axcompilefn(char *name, char **params, int pcount, stmt **body, int bcount);
+struct bytecode *axcompileprog(stmt **body, int count);
+object *axvmrun(struct bytecode *code, environment *env);
+object *axvmcall(object *fn, object **args, int argc, environment *env, object *self);
+extern object **axvmstack;
+extern int axvmsp;
+void axlvpush(object **lv, int cap);
+object **axlvpop(int n);
 object *callfunc(object *fn, object **args, int argc, environment *env, object *self);
 void registerbuiltins(environment *env);
 void registerstdlib(environment *env);
