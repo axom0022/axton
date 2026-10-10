@@ -1,5 +1,5 @@
-#ifndef http_h
-#define http_h
+#ifndef httph
+#define httph
 
 #include "../core/axton.h"
 
