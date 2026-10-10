@@ -82,7 +82,7 @@ void registerassetlib(environment *env);
 void registerframedebuglib(environment *env);
 void registerperfproflib(environment *env);
 void registerbuildsyslib(environment *env);
-void registerassetpip elib(environment *env);
+void registerassetpipelib(environment *env);
 void registerfluidlib(environment *env);
 void registeriklib(environment *env);
 void registermorphlib(environment *env);
@@ -163,7 +163,7 @@ void registerachievementslib(environment *env);
 void registerleaderboardslib(environment *env);
 void registeriaplib(environment *env);
 void registerantipiracylib(environment *env);
-void registerdr mlib(environment *env);
+void registerdrmlib(environment *env);
 void registerobjectpoollib(environment *env);
 void registereventsyslib(environment *env);
 void registerserviceloclib(environment *env);
@@ -235,7 +235,6 @@ void registershieldmodule(environment *env);
 void registercleanmodule(environment *env);
 
 void registeralllibs(environment *env) {
-    registerstdlib(env);
     registermathlib(env);
     registervectorlib(env);
     registergraphicslib(env);
@@ -317,7 +316,7 @@ void registeralllibs(environment *env) {
     registerframedebuglib(env);
     registerperfproflib(env);
     registerbuildsyslib(env);
-    registerassetpip elib(env);
+    registerassetpipelib(env);
     registerfluidlib(env);
     registeriklib(env);
     registermorphlib(env);
@@ -398,7 +397,7 @@ void registeralllibs(environment *env) {
     registerleaderboardslib(env);
     registeriaplib(env);
     registerantipiracylib(env);
-    registerdr mlib(env);
+    registerdrmlib(env);
     registerobjectpoollib(env);
     registereventsyslib(env);
     registerserviceloclib(env);
