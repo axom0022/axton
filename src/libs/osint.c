@@ -285,7 +285,6 @@ object *osintsocial(object **args, int argc, void *env) {
             free(desc);
         }
         regfree(&re);
-        // extract followers count from social media meta tags
         regex_t re2;
         regcomp(&re2, "\"followers\":([0-9]+)", REG_EXTENDED);
         if (regexec(&re2, html, 2, m, 0) == 0) {
