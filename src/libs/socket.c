@@ -16,11 +16,11 @@ object *socketcreate(object **a, int c, environment *env) {
 }
 
 object *socketconnect(object **a, int c, environment *env) {
-    if (c < 3 || a[0]->type != 0 || a[1]->type != 2 || a[2]->type != 0)
+    if (c < 3 || otype(a[0]) != 0 || otype(a[1]) != 2 || otype(a[2]) != 0)
         throwexception("connect needs fd host port");
-    int fd = a[0]->ival;
+    int fd = getival(a[0]);
     char *host = a[1]->sval;
-    int port = a[2]->ival;
+    int port = getival(a[2]);
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -33,19 +33,19 @@ object *socketconnect(object **a, int c, environment *env) {
 }
 
 object *socketsend(object **a, int c, environment *env) {
-    if (c < 2 || a[0]->type != 0 || a[1]->type != 2)
+    if (c < 2 || otype(a[0]) != 0 || otype(a[1]) != 2)
         throwexception("send needs fd and data");
-    int fd = a[0]->ival;
+    int fd = getival(a[0]);
     char *data = a[1]->sval;
     int sent = send(fd, data, strlen(data), 0);
     return makeint(sent);
 }
 
 object *socketrecv(object **a, int c, environment *env) {
-    if (c < 2 || a[0]->type != 0 || a[1]->type != 0)
+    if (c < 2 || otype(a[0]) != 0 || otype(a[1]) != 0)
         throwexception("recv needs fd and size");
-    int fd = a[0]->ival;
-    int size = a[1]->ival;
+    int fd = getival(a[0]);
+    int size = getival(a[1]);
     char *buf = malloc(size + 1);
     int n = recv(fd, buf, size, 0);
     if (n <= 0) { free(buf); return makestring(""); }
@@ -56,16 +56,16 @@ object *socketrecv(object **a, int c, environment *env) {
 }
 
 object *socketclose(object **a, int c, environment *env) {
-    if (c < 1 || a[0]->type != 0) throwexception("close needs fd");
-    close(a[0]->ival);
+    if (c < 1 || otype(a[0]) != 0) throwexception("close needs fd");
+    close(getival(a[0]));
     return makenone();
 }
 
 object *socketbind(object **a, int c, environment *env) {
-    if (c < 2 || a[0]->type != 0 || a[1]->type != 0)
+    if (c < 2 || otype(a[0]) != 0 || otype(a[1]) != 0)
         throwexception("bind needs fd and port");
-    int fd = a[0]->ival;
-    int port = a[1]->ival;
+    int fd = getival(a[0]);
+    int port = getival(a[1]);
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
@@ -76,14 +76,14 @@ object *socketbind(object **a, int c, environment *env) {
 }
 
 object *socketlisten(object **a, int c, environment *env) {
-    if (c < 1 || a[0]->type != 0) throwexception("listen needs fd");
-    if (listen(a[0]->ival, 10) < 0) throwexception("listen failed");
+    if (c < 1 || otype(a[0]) != 0) throwexception("listen needs fd");
+    if (listen(getival(a[0]), 10) < 0) throwexception("listen failed");
     return makenone();
 }
 
 object *socketaccept(object **a, int c, environment *env) {
-    if (c < 1 || a[0]->type != 0) throwexception("accept needs fd");
-    int fd = a[0]->ival;
+    if (c < 1 || otype(a[0]) != 0) throwexception("accept needs fd");
+    int fd = getival(a[0]);
     struct sockaddr_in client;
     socklen_t len = sizeof(client);
     int clientfd = accept(fd, (struct sockaddr*)&client, &len);
