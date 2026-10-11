@@ -81,11 +81,11 @@ static void httpsendresponse(int fd, int status, const char *ctype, const char *
     if (location) {
         headlen += snprintf(head + headlen, sizeof(head) - headlen, "Location: %s\r\n", location);
     }
-    if (extraheaders && extraheaders->type == 6) {
+    if (extraheaders && otype(extraheaders) == 6) {
         for (int i = 0; i < extraheaders->dict.count; i++) {
             object *k = extraheaders->dict.keyvals[i];
             object *v = extraheaders->dict.vals[i];
-            if (k && k->type == 2 && v && v->type == 2) {
+            if (k && otype(k) == 2 && v && otype(v) == 2) {
                 headlen += snprintf(head + headlen, sizeof(head) - headlen, "%s: %s\r\n", k->sval, v->sval);
             }
         }
@@ -96,21 +96,21 @@ static void httpsendresponse(int fd, int status, const char *ctype, const char *
 }
 
 static void httprespond(int fd, object *res) {
-    if (!res || res->type == 4) {
+    if (!res || otype(res) == 4) {
         httpsendresponse(fd, 204, "text/plain", "", NULL, NULL);
         return;
     }
-    if (res->type == 2) {
+    if (otype(res) == 2) {
         httpsendresponse(fd, 200, "text/html; charset=utf-8", res->sval, NULL, NULL);
         return;
     }
-    if (res->type == 0) {
+    if (otype(res) == 0) {
         char num[16];
-        snprintf(num, sizeof(num), "%ld", res->ival);
-        httpsendresponse(fd, (int)res->ival, "text/plain", num, NULL, NULL);
+        snprintf(num, sizeof(num), "%ld", getival(res));
+        httpsendresponse(fd, (int)getival(res), "text/plain", num, NULL, NULL);
         return;
     }
-    if (res->type == 6) {
+    if (otype(res) == 6) {
         int status = 200;
         const char *ctype = "text/html; charset=utf-8";
         const char *body = "";
@@ -118,15 +118,15 @@ static void httprespond(int fd, object *res) {
         object *extraheaders = NULL;
         object *o;
         o = dictget(res, makestring("status"));
-        if (o && o->type == 0) status = (int)o->ival;
+        if (o && otype(o) == 0) status = (int)getival(o);
         o = dictget(res, makestring("body"));
-        if (o && o->type == 2) body = o->sval;
+        if (o && otype(o) == 2) body = o->sval;
         o = dictget(res, makestring("contenttype"));
-        if (o && o->type == 2) ctype = o->sval;
+        if (o && otype(o) == 2) ctype = o->sval;
         o = dictget(res, makestring("location"));
-        if (o && o->type == 2) location = o->sval;
+        if (o && otype(o) == 2) location = o->sval;
         o = dictget(res, makestring("headers"));
-        if (o && o->type == 6) extraheaders = o;
+        if (o && otype(o) == 6) extraheaders = o;
         httpsendresponse(fd, status, ctype, body, extraheaders, location);
         return;
     }
@@ -143,7 +143,7 @@ static object *httpcallhandler(object *handler, object *req) {
     if (ex) {
         if (res) gcremoveroot(res);
         char msg[512];
-        snprintf(msg, sizeof(msg), "handler error: %s", ex->type == 2 ? ex->sval : "exception");
+        snprintf(msg, sizeof(msg), "handler error: %s", otype(ex) == 2 ? ex->sval : "exception");
         res = makestring(msg);
         object *r = makedict();
         dictset(r, makestring("status"), makeint(500));
@@ -262,8 +262,8 @@ static void httphandle(int fd) {
 }
 
 object *httpserve(object **a, int c, environment *env) {
-    if (c < 1 || a[0]->type != 0) throwexception("serve needs port");
-    int port = (int)a[0]->ival;
+    if (c < 1 || otype(a[0]) != 0) throwexception("serve needs port");
+    int port = (int)getival(a[0]);
     if (c >= 2) httpmainhandler = a[1];
 #ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
@@ -300,7 +300,7 @@ object *httpserve(object **a, int c, environment *env) {
 }
 
 object *httpget(object **a, int c, environment *env) {
-    if (c < 2 || a[0]->type != 2 || a[1]->type != 7 && a[1]->type != 8)
+    if (c < 2 || otype(a[0]) != 2 || otype(a[1]) != 7 && otype(a[1]) != 8)
         throwexception("get needs path and handler");
     if (httproutecount >= httproutemax) throwexception("too many routes");
     snprintf(httproutes[httproutecount].method, 16, "GET");
@@ -311,7 +311,7 @@ object *httpget(object **a, int c, environment *env) {
 }
 
 object *httppost(object **a, int c, environment *env) {
-    if (c < 2 || a[0]->type != 2 || a[1]->type != 7 && a[1]->type != 8)
+    if (c < 2 || otype(a[0]) != 2 || otype(a[1]) != 7 && otype(a[1]) != 8)
         throwexception("post needs path and handler");
     if (httproutecount >= httproutemax) throwexception("too many routes");
     snprintf(httproutes[httproutecount].method, 16, "POST");
@@ -324,10 +324,10 @@ object *httppost(object **a, int c, environment *env) {
 object *httpresponse(object **a, int c, environment *env) {
     if (c < 2) throwexception("response needs status and body");
     object *r = makedict();
-    dictset(r, makestring("status"), a[0]->type == 0 ? a[0] : makeint(200));
-    dictset(r, makestring("body"), a[1]->type == 2 ? a[1] : makestring(""));
+    dictset(r, makestring("status"), otype(a[0]) == 0 ? a[0] : makeint(200));
+    dictset(r, makestring("body"), otype(a[1]) == 2 ? a[1] : makestring(""));
     dictset(r, makestring("contenttype"),
-        c >= 3 && a[2]->type == 2 ? a[2] : makestring("text/html; charset=utf-8"));
+        c >= 3 && otype(a[2]) == 2 ? a[2] : makestring("text/html; charset=utf-8"));
     return r;
 }
 
@@ -335,13 +335,13 @@ object *httphtml(object **a, int c, environment *env) {
     if (c < 1) throwexception("html needs body");
     object *r = makedict();
     dictset(r, makestring("status"), makeint(200));
-    dictset(r, makestring("body"), a[0]->type == 2 ? a[0] : makestring(""));
+    dictset(r, makestring("body"), otype(a[0]) == 2 ? a[0] : makestring(""));
     dictset(r, makestring("contenttype"), makestring("text/html; charset=utf-8"));
     return r;
 }
 
 object *httpredirect(object **a, int c, environment *env) {
-    if (c < 1 || a[0]->type != 2) throwexception("redirect needs location");
+    if (c < 1 || otype(a[0]) != 2) throwexception("redirect needs location");
     object *r = makedict();
     dictset(r, makestring("status"), makeint(302));
     dictset(r, makestring("body"), makestring(""));
@@ -416,7 +416,7 @@ static char *httpreqclient(const char *method, const char *url, const char *data
 }
 
 object *httpclientget(object **a, int c, environment *env) {
-    if (c < 1 || a[0]->type != 2) throwexception("clientget needs url");
+    if (c < 1 || otype(a[0]) != 2) throwexception("clientget needs url");
     char *body = httpreqclient("GET", a[0]->sval, NULL);
     object *res = makestring(body);
     free(body);
@@ -424,7 +424,7 @@ object *httpclientget(object **a, int c, environment *env) {
 }
 
 object *httpclientpost(object **a, int c, environment *env) {
-    if (c < 2 || a[0]->type != 2 || a[1]->type != 2) throwexception("clientpost needs url and data");
+    if (c < 2 || otype(a[0]) != 2 || otype(a[1]) != 2) throwexception("clientpost needs url and data");
     char *body = httpreqclient("POST", a[0]->sval, a[1]->sval);
     object *res = makestring(body);
     free(body);
@@ -444,3 +444,4 @@ void registerhttplib(environment *env) {
     envset(mod->module.exports, "clientpost", makebuiltin(httpclientpost), 0);
     envset(env, "http", mod, 0);
 }
+    
